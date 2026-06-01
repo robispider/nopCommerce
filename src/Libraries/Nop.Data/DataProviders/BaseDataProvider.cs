@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using System.Linq.Expressions;
 using System.Reflection;
 using FluentMigrator;
@@ -477,7 +477,23 @@ public abstract partial class BaseDataProvider
     public virtual Task<IList<T>> QueryAsync<T>(string sql, params DataParameter[] parameters)
     {
         using var dataContext = CreateDataConnection();
-        return Task.FromResult<IList<T>>(dataContext.Query<T>(sql, parameters)?.ToList() ?? new List<T>());
+        return Task.FromResult(Query<T>(sql, parameters));
+    }
+
+    /// <summary>
+    /// Executes SQL command and returns results as collection of values of specified type
+    /// </summary>
+    /// <typeparam name="T">Type of result items</typeparam>
+    /// <param name="sql">SQL command text</param>
+    /// <param name="parameters">Parameters to execute the SQL command</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the collection of values of specified type
+    /// </returns>
+    public virtual IList<T> Query<T>(string sql, params DataParameter[] parameters)
+    {
+        using var dataContext = CreateDataConnection();
+        return dataContext.Query<T>(sql, parameters)?.ToList() ?? [];
     }
 
     /// <summary>

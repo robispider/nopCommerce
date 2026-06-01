@@ -305,6 +305,18 @@ public partial interface INopDataProvider
     Task<IList<T>> QueryAsync<T>(string sql, params DataParameter[] parameters);
 
     /// <summary>
+    /// Executes command and returns results as collection of values of specified type
+    /// </summary>
+    /// <typeparam name="T">Result record type</typeparam>
+    /// <param name="sql">Command text</param>
+    /// <param name="parameters">Command parameters</param>
+    /// <returns>
+    /// A task that represents the asynchronous operation
+    /// The task result contains the returns collection of query result records
+    /// </returns>
+    IList<T> Query<T>(string sql, params DataParameter[] parameters);
+
+    /// <summary>
     /// Truncates database table
     /// </summary>
     /// <param name="resetIdentity">Performs reset identity column</param>

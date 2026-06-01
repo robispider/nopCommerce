@@ -188,46 +188,6 @@ public partial class Order : BaseEntity, ISoftDeletedEntity
     public string CustomerIp { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether storing of credit card number is allowed
-    /// </summary>
-    public bool AllowStoringCreditCardNumber { get; set; }
-
-    /// <summary>
-    /// Gets or sets the card type
-    /// </summary>
-    public string CardType { get; set; }
-
-    /// <summary>
-    /// Gets or sets the card name
-    /// </summary>
-    public string CardName { get; set; }
-
-    /// <summary>
-    /// Gets or sets the card number
-    /// </summary>
-    public string CardNumber { get; set; }
-
-    /// <summary>
-    /// Gets or sets the masked credit card number
-    /// </summary>
-    public string MaskedCreditCardNumber { get; set; }
-
-    /// <summary>
-    /// Gets or sets the card CVV2
-    /// </summary>
-    public string CardCvv2 { get; set; }
-
-    /// <summary>
-    /// Gets or sets the card expiration month
-    /// </summary>
-    public string CardExpirationMonth { get; set; }
-
-    /// <summary>
-    /// Gets or sets the card expiration year
-    /// </summary>
-    public string CardExpirationYear { get; set; }
-
-    /// <summary>
     /// Gets or sets the authorization transaction identifier
     /// </summary>
     public string AuthorizationTransactionId { get; set; }
