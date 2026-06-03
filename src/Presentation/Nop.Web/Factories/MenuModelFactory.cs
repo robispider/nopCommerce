@@ -1,6 +1,7 @@
 ﻿using Nop.Core;
 using Nop.Core.Caching;
 using Nop.Core.Domain.Menus;
+using Nop.Core.Events;
 using Nop.Core.Http;
 using Nop.Services.Catalog;
 using Nop.Services.Customers;
@@ -29,6 +30,7 @@ public partial class MenuModelFactory : IMenuModelFactory
     protected readonly IAclService _aclService;
     protected readonly ICategoryService _categoryService;
     protected readonly ICustomerService _customerService;
+    protected readonly IEventPublisher _eventPublisher;
     protected readonly ILocalizationService _localizationService;
     protected readonly ILogger _logger;
     protected readonly IManufacturerService _manufacturerService;
@@ -51,6 +53,7 @@ public partial class MenuModelFactory : IMenuModelFactory
     public MenuModelFactory(IAclService aclService,
         ICategoryService categoryService,
         ICustomerService customerService,
+        IEventPublisher eventPublisher,
         ILocalizationService localizationService,
         ILogger logger,
         IManufacturerService manufacturerService,
@@ -69,6 +72,7 @@ public partial class MenuModelFactory : IMenuModelFactory
         _aclService = aclService;
         _categoryService = categoryService;
         _customerService = customerService;
+        _eventPublisher = eventPublisher;
         _localizationService = localizationService;
         _logger = logger;
         _manufacturerService = manufacturerService;
@@ -498,13 +502,20 @@ public partial class MenuModelFactory : IMenuModelFactory
         {
             var menus = await _menuService.GetAllMenusAsync(menuType, store.Id);
 
-            return await menus.SelectAwait(async menu => new MenuModel
+            return await menus.SelectAwait(async menu =>
             {
-                Id = menu.Id,
-                MenuType = (MenuType)menu.MenuTypeId,
-                Name = await _localizationService.GetLocalizedAsync(menu, m => m.Name),
-                CssClass = menu.CssClass,
-                Items = await PrepareMenuItemModelsAsync(menu)
+                var menuModel = new MenuModel
+                {
+                    Id = menu.Id,
+                    MenuType = (MenuType)menu.MenuTypeId,
+                    Name = await _localizationService.GetLocalizedAsync(menu, m => m.Name),
+                    CssClass = menu.CssClass,
+                    Items = await PrepareMenuItemModelsAsync(menu)
+                };
+
+                await _eventPublisher.PublishAsync(new MenuCreatedEvent(menuModel));
+
+                return menuModel;
             }).ToListAsync();
         });
     }
