@@ -169,7 +169,7 @@ public static partial class MessageTemplateSystemNames
     /// <summary>
     /// Represents system name of notification customer about the next recurring payments
     /// </summary>
-    public const string NEXT_RECURRING_PAYMENT_REMINDER = "NextRecurringPaymentReminder.CustomerNotification";
+    public const string NEXT_RECURRING_PAYMENT_CUSTOMER_NOTIFICATION = "NextRecurringPaymentNotification.CustomerNotification";
 
     #endregion
 

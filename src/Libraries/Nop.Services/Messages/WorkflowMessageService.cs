@@ -1474,33 +1474,25 @@ public partial class WorkflowMessageService : IWorkflowMessageService
     }
 
     /// <summary>
-    /// Sends a "Next recurring payment reminder" notification to a customer
+    /// Sends a "Next recurring payment notification" message to a customer
     /// </summary>
     /// <param name="recurringPayment">Recurring payment</param>
-    /// <param name="nextPaymentDate">Next payment date</param>
+    /// <param name="delayBeforeSend">Delay before send</param>
     /// <param name="languageId">Message language identifier</param>
     /// <returns>
     /// A task that represents the asynchronous operation
     /// The task result contains the queued email identifier
     /// </returns>
-    public virtual async Task<IList<int>> SendNextRecurringPaymentReminderCustomerNotificationAsync(RecurringPayment recurringPayment, DateTime? nextPaymentDate, int languageId)
+    public virtual async Task<IList<int>> SendNextRecurringPaymentNotificationCustomerMessageAsync(RecurringPayment recurringPayment, int delayBeforeSend, int languageId)
     {
         ArgumentNullException.ThrowIfNull(recurringPayment);
-
-        if (!nextPaymentDate.HasValue)
-            return new List<int>();
-
-        var delay = (int)Math.Round(((nextPaymentDate.Value - DateTime.UtcNow).TotalDays - 1) * 24);
-
-        if (delay <= 24)
-            return new List<int>();
-
+        
         var order = await _orderService.GetOrderByIdAsync(recurringPayment.InitialOrderId) ?? throw new Exception("Order cannot be loaded");
 
         var store = await _storeService.GetStoreByIdAsync(order.StoreId) ?? await _storeContext.GetCurrentStoreAsync();
         languageId = await EnsureLanguageIsActiveAsync(languageId, store.Id);
 
-        var messageTemplates = await GetActiveMessageTemplatesAsync(MessageTemplateSystemNames.NEXT_RECURRING_PAYMENT_REMINDER, store.Id);
+        var messageTemplates = await GetActiveMessageTemplatesAsync(MessageTemplateSystemNames.NEXT_RECURRING_PAYMENT_CUSTOMER_NOTIFICATION, store.Id);
         if (!messageTemplates.Any())
             return new List<int>();
 
@@ -1526,7 +1518,7 @@ public partial class WorkflowMessageService : IWorkflowMessageService
             var toEmail = billingAddress.Email;
             var toName = $"{billingAddress.FirstName} {billingAddress.LastName}";
             messageTemplate.DelayPeriod = MessageDelayPeriod.Hours;
-            messageTemplate.DelayBeforeSend = delay;
+            messageTemplate.DelayBeforeSend = delayBeforeSend;
 
             return await SendNotificationAsync(messageTemplate, emailAccount, languageId, tokens, toEmail, toName);
         }).ToListAsync();

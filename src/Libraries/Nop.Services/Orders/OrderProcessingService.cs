@@ -1269,9 +1269,14 @@ public partial class OrderProcessingService : IOrderProcessingService
                 break;
         }
 
+        var delay = await GetNextRecurringPaymentDelayAsync(recurringPayment);
+
+        if (delay <= 0)
+            return;
+
         //send notifications about next payment
-        var emails = await _workflowMessageService.SendNextRecurringPaymentReminderCustomerNotificationAsync(recurringPayment, await GetNextPaymentDateAsync(recurringPayment), order.CustomerLanguageId);
-        await _genericAttributeService.SaveAttributeAsync(recurringPayment, NopPaymentDefaults.RecurringPaymentReminderEmailsAttribute, emails);
+        var emails = await _workflowMessageService.SendNextRecurringPaymentNotificationCustomerMessageAsync(recurringPayment, delay, order.CustomerLanguageId);
+        await _genericAttributeService.SaveAttributeAsync(recurringPayment, NopPaymentDefaults.NextRecurringPaymentNotificationEmailsAttribute, emails);
     }
 
     /// <summary>
@@ -1547,6 +1552,23 @@ public partial class OrderProcessingService : IOrderProcessingService
 
         if (!isOrderSaved)
             await _orderService.UpdateOrderAsync(order);
+    }
+
+    /// <summary>
+    /// Get next recurring payment delay (in hours)
+    /// </summary>
+    /// <param name="recurringPayment">Recurring payment</param>
+    /// <returns>Delay in hours</returns>
+    protected virtual async Task<int> GetNextRecurringPaymentDelayAsync(RecurringPayment recurringPayment)
+    {
+        var nextPaymentDate = await GetNextPaymentDateAsync(recurringPayment);
+
+        if (!nextPaymentDate.HasValue)
+            return 0;
+
+        var delay = (int)Math.Round(((nextPaymentDate.Value - DateTime.UtcNow).TotalDays - _orderSettings.NextUpcomingRecurringPaymentNotificationDays) * 24);
+
+        return delay;
     }
 
     #endregion
@@ -2021,9 +2043,14 @@ public partial class OrderProcessingService : IOrderProcessingService
 
                 await _orderService.UpdateRecurringPaymentAsync(recurringPayment);
 
+                var delay = await GetNextRecurringPaymentDelayAsync(recurringPayment);
+
+                if (delay <= 0)
+                    return new List<string>();
+
                 //send notifications about next payment
-                var emails = await _workflowMessageService.SendNextRecurringPaymentReminderCustomerNotificationAsync(recurringPayment, await GetNextPaymentDateAsync(recurringPayment), order.CustomerLanguageId);
-                await _genericAttributeService.SaveAttributeAsync(recurringPayment, NopPaymentDefaults.RecurringPaymentReminderEmailsAttribute, emails);
+                var emails = await _workflowMessageService.SendNextRecurringPaymentNotificationCustomerMessageAsync(recurringPayment, delay, order.CustomerLanguageId);
+                await _genericAttributeService.SaveAttributeAsync(recurringPayment, NopPaymentDefaults.NextRecurringPaymentNotificationEmailsAttribute, emails);
 
                 return new List<string>();
             }
@@ -2105,13 +2132,13 @@ public partial class OrderProcessingService : IOrderProcessingService
                     .SendRecurringPaymentCancelledStoreOwnerNotificationAsync(recurringPayment,
                         _localizationSettings.DefaultAdminLanguageId);
 
-                //remove reminder emails
-                var emailIds = await _genericAttributeService.GetAttributeAsync<List<int>>(recurringPayment, NopPaymentDefaults.RecurringPaymentReminderEmailsAttribute);
+                //remove next recurring payment notification emails
+                var emailIds = await _genericAttributeService.GetAttributeAsync<List<int>>(recurringPayment, NopPaymentDefaults.NextRecurringPaymentNotificationEmailsAttribute);
                 if (emailIds != null && emailIds.Any())
                 {
                     var emails = await _queuedEmailService.GetQueuedEmailsByIdsAsync(emailIds.ToArray());
                     await _queuedEmailService.DeleteQueuedEmailsAsync(emails);
-                    await _genericAttributeService.SaveAttributeAsync<List<int>>(recurringPayment, NopPaymentDefaults.RecurringPaymentReminderEmailsAttribute, null);
+                    await _genericAttributeService.SaveAttributeAsync<List<int>>(recurringPayment, NopPaymentDefaults.NextRecurringPaymentNotificationEmailsAttribute, null);
                 }
             }
         }

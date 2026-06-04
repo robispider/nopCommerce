@@ -14,7 +14,7 @@ public static partial class NopPaymentDefaults
     public static string RestrictedCountriesSettingName => "PaymentMethodRestictions.{0}";
 
     /// <summary>
-    /// Gets a name of generic attribute to store the list of identifiers for reminder emails
+    /// Gets a name of generic attribute to store the list of identifiers for next recurring payment notification emails
     /// </summary>
-    public static string RecurringPaymentReminderEmailsAttribute => "RecurringPaymentReminderEmails";
+    public static string NextRecurringPaymentNotificationEmailsAttribute => "NextRecurringPaymentNotificationEmails";
 }
