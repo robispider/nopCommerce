@@ -206,5 +206,5 @@ public partial class OrderSettings : ISettings
     /// <summary>
     /// Gets or sets the number of days before the next recurring payment when the notification should be sent to customers
     /// </summary>
-    public int NextUpcomingRecurringPaymentNotificationDays { get; set; }
+    public int NextRecurringPaymentNotificationDays { get; set; }
 }

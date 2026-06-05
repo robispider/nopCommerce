@@ -1100,7 +1100,7 @@ public partial class MessageTokenProvider : IMessageTokenProvider
         var orderUrl = await RouteUrlAsync(order.StoreId, NopRouteNames.Standard.ORDER_DETAILS, new { orderId = order.Id });
         tokens.Add(new Token("Order.OrderURLForCustomer", orderUrl, true));
 
-        tokens.Add(new Token("Order.NextRecurringPaymentDelay", _orderSettings.NextUpcomingRecurringPaymentNotificationDays.ToString()));
+        tokens.Add(new Token("Order.NextRecurringPaymentDelay", _orderSettings.NextRecurringPaymentNotificationDays.ToString()));
 
         //event notification
         await _eventPublisher.EntityTokensAddedAsync(order, tokens);

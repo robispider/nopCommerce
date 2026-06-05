@@ -522,8 +522,8 @@ public class LocalizationMigration : MigrationBase
             ["Admin.System.Maintenance.ClearSearchHistory.TotalDeleted"] = "{0} items were deleted",
 
             //#309
-            ["Admin.Configuration.Settings.Order.NextUpcomingRecurringPaymentNotificationDays"] = "Next Upcoming Recurring Payment Notification Days",
-            ["Admin.Configuration.Settings.Order.NextUpcomingRecurringPaymentNotificationDays.Hint"] = "Number of days before the next upcoming recurring payment when customers should receive a notification email. Set to 0 to disable this notification.",
+            ["Admin.Configuration.Settings.Order.NextRecurringPaymentNotificationDays"] = "Next Recurring Payment Notification Days",
+            ["Admin.Configuration.Settings.Order.NextRecurringPaymentNotificationDays.Hint"] = "Number of days before the next recurring payment when customers should receive a notification email. Set to 0 to disable this notification.",
         });
 
         #endregion

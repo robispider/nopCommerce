@@ -1803,7 +1803,7 @@ public partial class InstallationService
             ExportWithProducts = true,
             AllowAdminsToBuyCallForPriceProducts = true,
             AllowCustomersCancelOrders = true,
-            NextUpcomingRecurringPaymentNotificationDays = 1,
+            NextRecurringPaymentNotificationDays = 1,
             ShowProductThumbnailInOrderDetailsPage = true,
             DisplayCustomerCurrencyOnOrders = false,
             DisplayOrderSummary = true,

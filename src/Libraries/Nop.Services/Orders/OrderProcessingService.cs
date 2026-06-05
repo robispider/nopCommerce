@@ -1566,7 +1566,7 @@ public partial class OrderProcessingService : IOrderProcessingService
         if (!nextPaymentDate.HasValue)
             return 0;
 
-        var delay = (int)Math.Round(((nextPaymentDate.Value - DateTime.UtcNow).TotalDays - _orderSettings.NextUpcomingRecurringPaymentNotificationDays) * 24);
+        var delay = (int)Math.Round(((nextPaymentDate.Value - DateTime.UtcNow).TotalDays - _orderSettings.NextRecurringPaymentNotificationDays) * 24);
 
         return delay;
     }

@@ -75,7 +75,7 @@ public class SettingMigration : MigrationBase
         this.SetSettingIfNotExists<CatalogSettings, int>(settings => settings.NumberOfSearchTermHistoryItems, 10);
 
         //#309
-        this.SetSettingIfNotExists<OrderSettings, int>(settings => settings.NextUpcomingRecurringPaymentNotificationDays, 1);
+        this.SetSettingIfNotExists<OrderSettings, int>(settings => settings.NextRecurringPaymentNotificationDays, 1);
     }
 
     public override void Down()
