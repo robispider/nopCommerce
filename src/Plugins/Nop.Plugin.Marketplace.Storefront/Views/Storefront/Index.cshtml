@@ -1,0 +1,52 @@
+@model Nop.Plugin.Marketplace.Storefront.Models.StorefrontIndexModel
+@using Nop.Web.Framework.UI
+
+@{
+    Layout = "_ColumnsOne";
+    
+    // Set the SEO Page Title dynamically to the Reseller's Store Name
+    Html.AddTitleParts(Model.StoreName);
+}
+
+<div class="page custom-storefront-page">
+    <div class="page-title">
+        <h1>@Model.StoreName</h1>
+    </div>
+
+    <div class="page-body">
+        
+        @* Optional: Reseller Store Banner *@
+        @if (!string.IsNullOrEmpty(Model.BannerUrl))
+        {
+            <div class="storefront-banner" style="margin-bottom: 20px; text-align: center;">
+                <img src="@Model.BannerUrl" alt="@Model.StoreName Banner" style="max-width: 100%; height: auto; border-radius: 8px;" />
+            </div>
+        }
+
+        @* Cloned Product Grid *@
+        @if (Model.Products.Any())
+        {
+            <div class="product-grid">
+                <div class="item-grid">
+                    @foreach (var product in Model.Products)
+                    {
+                        <div class="item-box">
+                            @* 
+                                We reuse the native nopCommerce product box! 
+                                This ensures Add-To-Cart, Wishlist, and Compare buttons work instantly.
+                            *@
+                            @await Html.PartialAsync("_ProductBox", product)
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="no-data">
+                This store doesn't have any products yet.
+            </div>
+        }
+
+    </div>
+</div>

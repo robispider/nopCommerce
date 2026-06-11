@@ -1,0 +1,95 @@
+@model Nop.Plugin.Marketplace.Storefront.Models.StorefrontConfigurationModel
+
+@{
+    // Notice we use the standard AdminLayout, not ConfigurePlugin!
+    Layout = "_AdminLayout";
+    ViewBag.PageTitle = "Manage My Storefront";
+}
+
+<form asp-controller="StorefrontAdmin" asp-action="Configure" method="post">
+    <div class="content-header clearfix">
+        <h1 class="float-left">
+            Manage My Storefront
+        </h1>
+        <div class="float-right">
+            <button type="submit" name="save" class="btn btn-primary">
+                <i class="fas fa-save"></i>
+                Save Preferences
+            </button>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            <div class="cards-group">
+                <div class="card card-default">
+                    <div class="card-body">
+                        
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="IsActive" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="IsActive" />
+                                <span asp-validation-for="IsActive"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="StoreName" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="StoreName" />
+                                <span asp-validation-for="StoreName"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="UrlSlug" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="UrlSlug" />
+                                <span asp-validation-for="UrlSlug"></span>
+                                <small class="form-text text-muted">Your store will be live at: <strong>/store/[your-slug]</strong></small>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="PrimaryColorHex" />
+                            </div>
+                            <div class="col-md-9">
+                                <!-- Standard HTML5 Color Picker -->
+                                <input type="color" asp-for="PrimaryColorHex" class="form-control" style="max-width: 100px; padding: 2px;" />
+                                <span asp-validation-for="PrimaryColorHex"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="LogoPictureId" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="LogoPictureId" />
+                                <span asp-validation-for="LogoPictureId"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="BannerPictureId" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="BannerPictureId" />
+                                <span asp-validation-for="BannerPictureId"></span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</form>

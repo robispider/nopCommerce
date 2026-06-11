@@ -1,0 +1,39 @@
+@model Nop.Plugin.Marketplace.Storefront.Models.StorefrontBrandingModel
+
+<!-- Marketplace.Storefront: Dynamic Reseller Branding Injection -->
+<style>
+    :root {
+        /* Override nopCommerce standard theme variables */
+        --color-primary: @Model.PrimaryColorHex !important;
+        --button-primary-bg: @Model.PrimaryColorHex !important;
+        --button-primary-bg-hover: @Model.PrimaryColorHex !important; /* In a real app, calculate a slightly darker hex here */
+        --link-color: @Model.PrimaryColorHex !important;
+    }
+
+    /* Force UI elements that don't use variables to adopt the primary color */
+    .header-lower {
+        background-color: var(--color-primary) !important;
+    }
+    
+    .button-1 {
+        background-color: var(--color-primary) !important;
+        border-color: var(--color-primary) !important;
+    }
+
+    @if (!string.IsNullOrEmpty(Model.LogoUrl))
+    {
+        <text>
+        /* Replace the master theme logo with the Reseller's custom logo */
+        .header-logo a {
+            background-image: url('@Model.LogoUrl') !important;
+            background-size: contain !important;
+            background-repeat: no-repeat !important;
+            background-position: center !important;
+            display: block !important;
+        }
+        .header-logo a img {
+            display: none !important; /* Hide the native master-theme img tag */
+        }
+        </text>
+    }
+</style>

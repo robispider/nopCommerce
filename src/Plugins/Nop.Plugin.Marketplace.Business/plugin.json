@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Business Profiles",
+  "SystemName": "Marketplace.Business",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 2,
+  "FileName": "Nop.Plugin.Marketplace.Business.dll",
+  "Description": "Manages vendor verification, KYC workflows, and roles."
+}

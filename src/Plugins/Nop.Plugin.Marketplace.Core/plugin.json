@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Core Framework",
+  "SystemName": "Marketplace.Core",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Marketplace.Core.dll",
+  "Description": "Core data models, shared services, and event definitions for the B2B/B2C Marketplace architecture."
+}

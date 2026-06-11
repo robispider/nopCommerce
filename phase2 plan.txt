@@ -1,0 +1,151 @@
+Phase 2 Execution Plan: Storefront Routing & Retail UX
+The Architecture
+ResellerStorefront Entity: A custom table linking a VendorId to a UrlSlug, CustomDomain, and branding elements (colors, logos).
+IStorefrontContext: A scoped service that inspects every HTTP request (looking at the URL path or subdomain) and caches the active Storefront in memory.
+INopRouteProvider: Registers custom dynamic routes without breaking standard nopCommerce routing.
+Dynamic CSS Injection: A Widget that injects CSS variables (like --primary-color) into the <head> of the page, completely reskinning the master theme based on the active Reseller.
+Step 1: Create Marketplace.Storefront Plugin
+Create a new Class Library project: Nop.Plugin.Marketplace.Storefront.
+.csproj: Configure it exactly like Phase 1, targeting net9.0, with the MSBuild NopTarget cleanup script. Reference Marketplace.Core.
+plugin.json: Name it "Marketplace Storefront Engine", Group: "Marketplace", Version: "1.00", SupportedVersions: ["4.90"].
+Step 2: Storefront Data Model & Migration
+We need a table to store the Reseller's branding and URL configuration.
+1. Create the Entity (Domains/ResellerStorefront.cs)
+code
+C#
+public partial class ResellerStorefront : BaseEntity
+{
+    public int VendorId { get; set; } // The Reseller
+    public string UrlSlug { get; set; } // e.g., "shoeking"
+    public string CustomDomain { get; set; } // e.g., "shoeking.com" (For future use)
+    public string StoreName { get; set; }
+    public string PrimaryColorHex { get; set; } // e.g., "#FF0000"
+    public int LogoPictureId { get; set; } // Links to native Picture table
+    public int BannerPictureId { get; set; }
+    public bool IsActive { get; set; }
+}
+2. Create the Builder & Migration (Data/StorefrontBuilder.cs & SchemaMigration.cs)
+Use NopEntityBuilder<ResellerStorefront>.
+Crucially, Index the UrlSlug and CustomDomain columns. The application will query these columns on every single page load, so they must be indexed for instantaneous lookups.
+Step 3: Implement IStorefrontContext (The Request Sniffer)
+This is the brain of Phase 2. It inspects the current HTTP request, extracts the slug, and holds the ResellerStorefront data in memory for the duration of the request.
+Services/IStorefrontContext.cs
+code
+C#
+public interface IStorefrontContext
+{
+    Task<ResellerStorefront> GetCurrentStorefrontAsync();
+}
+Services/StorefrontContext.cs
+Inject IHttpContextAccessor and IStaticCacheManager.
+Logic:
+Read _httpContextAccessor.HttpContext.Request.Path.
+Does it start with /store/{slug}?
+If yes, extract the {slug}.
+Query the database for the ResellerStorefront matching that slug.
+Cache the result using nopCommerce's IStaticCacheManager so subsequent requests for the same storefront don't hit the database.
+Return the ResellerStorefront.
+Step 4: Custom Routing Engine
+We need to register our /store/{slug} URL structure with the ASP.NET Core endpoint routing system without breaking nopCommerce's native catch-all routes.
+Infrastructure/StorefrontRouteProvider.cs
+code
+C#
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
+using Nop.Web.Framework.Mvc.Routing;
+
+namespace Nop.Plugin.Marketplace.Storefront.Infrastructure
+{
+    public class StorefrontRouteProvider : INopRouteProvider
+    {
+        public void RegisterRoutes(IEndpointRouteBuilder endpointRouteBuilder)
+        {
+            // Maps /store/shoeking to the StorefrontController -> Index Action
+            endpointRouteBuilder.MapControllerRoute(
+                name: "MarketplaceStorefront",
+                pattern: "store/{slug}/{action=Index}/{id?}",
+                defaults: new { controller = "Storefront", action = "Index" }
+            );
+        }
+
+        // Must be higher than 0 so it registers before the generic native routes
+        public int Priority => 100; 
+    }
+}
+Step 5: Dynamic Branding Injection (CSS Variables)
+Instead of cloning physical HTML/CSS themes for every Reseller (which kills performance), we will inject a dynamic <style> block into the HTML <head>.
+1. Create a ViewComponent (Components/StorefrontBrandingViewComponent.cs)
+Inject IStorefrontContext.
+If GetCurrentStorefrontAsync() is null, return an empty view.
+If it exists, pass the ResellerStorefront model to the View.
+2. Create the View (Views/StorefrontBranding/Default.cshtml)
+code
+Html
+@model Nop.Plugin.Marketplace.Storefront.Domains.ResellerStorefront
+
+<style>
+    /* Override standard nopCommerce theme variables globally! */
+    :root {
+        --primary-color: @Model.PrimaryColorHex !important;
+        --button-background: @Model.PrimaryColorHex !important;
+    }
+    
+    /* Inject custom Logo */
+    .header-logo a {
+        background-image: url('@Url.Content("~/images/uploaded/" + Model.LogoPictureId)'); /* Simplified for example */
+    }
+</style>
+3. Register the Widget Zone in the Plugin Class
+In MarketplaceStorefrontPlugin.cs, implement IWidgetPlugin.
+Map the ViewComponent to PublicWidgetZones.HeadHtmlTag.
+Result: Whenever a consumer visits /store/shoeking/..., the <head> of the page is automatically injected with ShoeKing's colors and logo, instantly reskinning the entire website!
+Step 6: The Storefront Homepage Controller
+When a user visits /store/shoeking, they should see the Reseller's specific homepage, banner, and cloned products.
+Controllers/StorefrontController.cs
+code
+C#
+using Microsoft.AspNetCore.Mvc;
+using Nop.Web.Framework.Controllers;
+
+namespace Nop.Plugin.Marketplace.Storefront.Controllers
+{
+    public class StorefrontController : BasePluginController
+    {
+        private readonly IStorefrontContext _storefrontContext;
+        private readonly IProductService _productService; // Core service
+
+        public StorefrontController(IStorefrontContext storefrontContext, IProductService productService)
+        {
+            _storefrontContext = storefrontContext;
+            _productService = productService;
+        }
+
+        public async Task<IActionResult> Index(string slug)
+        {
+            var storefront = await _storefrontContext.GetCurrentStorefrontAsync();
+            if (storefront == null) return NotFound();
+
+            // Fetch products OWNED by this specific Reseller
+            // Because of Phase 1 "Light Cloning", these products are native to nopCommerce!
+            var products = await _productService.SearchProductsAsync(
+                vendorId: storefront.VendorId,
+                visibleIndividuallyOnly: true
+            );
+
+            // Pass products and storefront data to a custom View
+            return View("~/Plugins/Marketplace.Storefront/Views/Storefront/Index.cshtml", products);
+        }
+    }
+}
+Step 7: Reseller Admin Dashboard UI
+Resellers need a place to pick their colors and set their slug.
+Create an Admin Controller: StorefrontAdminController.
+Add a form with fields for: Store Name, URL Slug, Primary Color (Color Picker), and Logo Upload.
+Inject this menu item into the Vendor Dashboard (using the AdminMenuCreatedEvent we mastered in Phase 1).
+Definition of Done (Phase 2 Success Criteria)
+You are ready to move to Phase 3 when:
+Admin Configuration: A Reseller (Vendor) can log into the backend, click "My Storefront", and set their slug (e.g., shoeking) and a custom Hex color (#ff6600).
+Routing Works: Navigating to https://localhost:51000/store/shoeking loads without a 404.
+Dynamic Branding Works: When visiting that URL, the global CSS of the nopCommerce store instantly shifts to #ff6600.
+Data Isolation: The homepage of /store/shoeking only displays products that Vendor explicitly owns (cloned from Phase 1).
+Let me know when you are ready to begin coding Step 1 and Step 2 of this phase, and I will generate the compile-ready net9.0 classes!

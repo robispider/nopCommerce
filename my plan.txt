@@ -1,0 +1,2219 @@
+
+
+
+Claim offer
+Your updated model is actually stronger than the original plan because it aligns much more closely with how nopCommerce already works instead of fighting the framework.
+
+The biggest architectural change I would make is:
+
+Do not think of "Supplier" and "Reseller" as separate account types.
+
+Think of them as business capabilities (roles).
+
+A company may be:
+
+Supplier only
+
+Reseller only
+
+Supplier + Reseller simultaneously
+
+This matches real-world business behavior.
+
+Example:
+
+Importer imports shoes from China.
+
+Sells wholesale to resellers.
+
+Also operates its own retail storefront.
+
+Also uses dropshipping.
+
+Same account.
+
+Updated Marketplace Architecture
+Actor Types
+Consumer
+Can:
+
+Browse storefronts
+
+Purchase products
+
+Pre-order products
+
+Cannot:
+
+View wholesale information
+
+View suppliers
+
+Reseller
+Can:
+
+Create storefront
+
+Sell own inventory
+
+Import supplier products
+
+Dropship supplier products
+
+Take pre-orders
+
+Set retail pricing
+
+Build own brand
+
+Like:
+
+Amazon seller
+
+Daraz seller
+
+Shopify merchant
+
+Supplier / Dealer / Importer
+Can:
+
+Maintain wholesale storefront
+
+Offer products to resellers
+
+Enable dropshipping
+
+Enable preorder
+
+Set MOQ
+
+Set MAP pricing
+
+Set reseller restrictions
+
+Can also be reseller.
+
+Platform Admin
+Approves:
+
+Supplier accounts
+
+Reseller storefronts
+
+Withdrawals
+
+Disputes
+
+Controls:
+
+Commission
+
+Escrow
+
+Fraud management
+
+Use nopCommerce Native Features
+Keep:
+
+Vendor
+Multi-store
+Customer Roles
+ACL
+Vendor Portal
+
+Avoid modifying core.
+
+Build plugins.
+
+Business Profiles
+Instead of:
+
+SupplierProfile
+StoreProfile
+
+Create:
+
+BusinessProfile
+
+BusinessProfile
+(
+    Id,
+    CustomerId,
+
+    CompanyName,
+
+    BusinessType
+    -- Supplier
+    -- Reseller
+    -- Both
+
+    TradeLicense,
+    TinNumber,
+
+    Status
+)
+Storefront Model
+This is where your idea changes significantly.
+
+Every reseller may own one or more storefronts.
+
+StoreFront
+(
+    Id,
+
+    OwnerCustomerId,
+
+    StoreName,
+
+    Logo,
+
+    DomainName,
+
+    Status
+)
+Examples:
+
+Company	Storefront
+ABC Imports	ABC Wholesale
+ABC Imports	ShoeKing
+ABC Imports	FashionBD
+One business can own multiple stores.
+
+Store Types
+StoreType
+
+Wholesale
+Retail
+Hybrid
+Wholesale Store
+Visible only to approved resellers.
+
+Shows:
+
+Wholesale price
+
+MOQ
+
+Dropship options
+
+Bulk pricing
+
+Retail Store
+Visible to consumers.
+
+Shows:
+
+Retail price
+
+Branding
+
+Never shows supplier.
+
+Hybrid Store
+Acts as both.
+
+Example:
+
+Importer selling both wholesale and retail.
+
+Supplier Product
+SupplierProduct
+(
+    Id,
+
+    ProductId,
+
+    VendorId,
+
+    WholesalePrice,
+
+    MOQ,
+
+    DropshipAllowed,
+
+    PreorderAllowed,
+
+    MinOrderQty,
+
+    MaxOrderQty,
+
+    LeadTimeDays
+)
+This becomes the wholesale catalog.
+
+Reseller Product
+Do NOT duplicate product records.
+
+Use mapping.
+
+ResellerProduct
+(
+    Id,
+
+    ResellerId,
+
+    SupplierProductId,
+
+    RetailPrice,
+
+    MarkupType,
+
+    MarkupValue,
+
+    AutoSyncPrice,
+
+    AutoSyncStock
+)
+Very scalable.
+
+Wholesale Conditions
+Each supplier product can define:
+
+AllowDropship
+AllowPreorder
+AllowWholesale
+AllowRetail
+
+MOQ
+
+MinQty
+
+MaxQty
+
+LeadTime
+Examples:
+
+Product A
+Dropship = Yes
+
+MOQ = 1
+
+Result:
+
+Perfect for resellers.
+
+Product B
+Dropship = No
+
+MOQ = 100
+
+Result:
+
+Bulk wholesale only.
+
+Product C
+Preorder = Yes
+
+Lead Time = 30 days
+
+Result:
+
+Consumer preorder enabled.
+
+Multi-Store Strategy
+This is where nopCommerce's built-in multi-store becomes very useful.
+
+Each storefront can have:
+
+storeA.com
+storeB.com
+storeC.com
+all served from:
+
+one nopCommerce installation
+using native multi-store.
+
+You don't need separate deployments.
+
+Consumer Experience
+Consumer sees:
+
+ShoeKing
+Nike Air Max
+৳3500
+Consumer never sees:
+
+ABC Importers
+Wholesale Price
+MOQ
+Supplier remains hidden.
+
+Dropshipping Flow
+Consumer Order
+↓
+Reseller Store
+↓
+Supplier Fulfillment Order
+↓
+Supplier Ships
+
+Supplier receives:
+
+customer address
+
+shipping details
+
+Reseller receives:
+
+status updates
+
+Customer sees:
+
+Shipped by ShoeKing
+not supplier name.
+
+Preorder Escrow System
+This is one of the most valuable features for Bangladesh.
+
+Flow:
+
+Consumer Preorder
+↓
+Payment Collected
+↓
+Escrow Wallet
+↓
+Supplier Delivers
+↓
+Funds Released
+
+Tables:
+
+EscrowTransaction
+(
+    Id,
+
+    OrderId,
+
+    Amount,
+
+    Status,
+
+    ReleaseDate
+)
+Status:
+
+Pending
+Released
+Refunded
+Disputed
+This greatly increases trust for imported products.
+
+Inventory Model
+Three inventory modes:
+
+Mode 1
+Supplier Inventory
+
+Shared stock
+Dropship
+Mode 2
+Reseller Inventory
+
+Own warehouse
+Mode 3
+Hybrid
+
+Some supplier stock
+Some local stock
+This is probably what larger sellers will use.
+
+Recommended Plugin Structure
+Marketplace.Core
+
+Marketplace.Business
+
+Marketplace.Storefront
+
+Marketplace.Supplier
+
+Marketplace.Reseller
+
+Marketplace.Dropship
+
+Marketplace.Preorder
+
+Marketplace.Escrow
+
+Marketplace.Inventory
+
+Marketplace.Commission
+
+Marketplace.Wallet
+
+Marketplace.Admin
+What Makes This Unique in Bangladesh?
+Most Bangladeshi marketplaces today are:
+
+Retail only
+
+Vendor only
+
+Classified only
+
+Your model becomes:
+
+Alibaba + Shopify + Daraz + Dropshipping + Escrow in one platform.
+
+A supplier/importer can:
+
+sell wholesale
+
+sell retail
+
+enable dropshipping
+
+enable preorder
+
+A reseller can:
+
+create branded storefront
+
+sell own stock
+
+sell supplier stock
+
+take preorder
+
+Consumers only see branded stores.
+
+From a nopCommerce perspective, this design is feasible and is much closer to nopCommerce's native Vendor + Multi-Store architecture than the original plan, which means lower customization cost and easier upgrades when new nopCommerce versions are released.
+
+
+we must use native features and plugins (mostly we do not modify core and keep get updates from the nopcommerce main source code repo )
+just to confirm the reseller may have separate domain store front (mostly not ) 
+the reseller/wholeseller store front would be https://www.aliexpress.com/store/somestore that lists its product and has its profile info. if they choose then they can have somstore.com domain or somestore.myplatform.com store front. 
+in anycase they can customize store theme and layout 
+possible ?
+
+Yes, it is possible, but I would slightly adjust the architecture to maximize compatibility with nopCommerce upgrades.
+
+What I Would NOT Do
+I would NOT create a separate nopCommerce Store (Multi-Store feature) for every reseller.
+
+Because if you have:
+
+100 resellers
+
+1,000 resellers
+
+10,000 resellers
+
+then nopCommerce Multi-Store becomes difficult to manage.
+
+The native Multi-Store feature is better suited for:
+
+Main Marketplace
+
+Wholesale Portal
+
+International Store
+
+Corporate Store
+
+For example:
+
+marketplace.com
+wholesale.marketplace.com
+global.marketplace.com
+Not:
+
+1000 individual reseller stores
+Better Approach
+Use one main storefront.
+
+Create a plugin:
+
+Marketplace.Storefront
+with:
+
+Storefront
+(
+    Id,
+    OwnerCustomerId,
+    Name,
+    Slug,
+    CustomDomain,
+    ThemeId,
+    LayoutId
+)
+Example:
+
+marketplace.com/store/shoeking
+
+marketplace.com/store/fashionhouse
+
+marketplace.com/store/mobilemart
+or
+
+marketplace.com/shoeking
+similar to:
+
+aliexpress.com/store/xxxx
+etsy.com/shop/xxxx
+daraz.com.bd/shop/xxxx
+This should be your primary model.
+
+Custom Domain Support
+Then optionally allow:
+
+shoeking.com
+or
+
+shop.shoeking.com
+or
+
+shoeking.marketplace.com
+through a mapping table:
+
+StorefrontDomain
+(
+    Id,
+    StorefrontId,
+    Domain
+)
+Request:
+
+shoeking.com
+↓
+
+Resolve domain
+
+↓
+
+Load storefront
+
+↓
+
+Display reseller products
+
+Theme Customization
+This is also possible without modifying core.
+
+Storefront settings:
+
+StorefrontTheme
+(
+    StorefrontId,
+
+    Theme,
+
+    Logo,
+
+    Banner,
+
+    Font,
+
+    ColorScheme
+)
+Reseller chooses:
+
+logo
+
+banner
+
+colors
+
+homepage blocks
+
+featured products
+
+similar to Shopify.
+
+Layout Customization
+Possible at several levels.
+
+Level 1 (Recommended)
+Configuration based.
+
+Choose:
+
+Theme A
+Theme B
+Theme C
+No coding.
+
+Level 2
+Page Builder.
+
+Reseller can drag:
+
+Hero Banner
+Category Grid
+Featured Products
+Video
+Text Block
+similar to Shopify.
+
+This can be built as a plugin.
+
+Level 3
+Full custom Razor/HTML.
+
+I would avoid this.
+
+Security and upgrade problems.
+
+Supplier Storefront
+Supplier should also have storefronts.
+
+Example:
+
+marketplace.com/wholesale/abc-imports
+Visible only to approved resellers.
+
+Contains:
+
+MOQ
+
+wholesale price
+
+lead time
+
+dropship rules
+
+preorder rules
+
+Consumers cannot access.
+
+Final Architecture I Would Recommend
+Public Marketplace
+marketplace.com
+Consumer-facing catalog.
+
+Retail Storefronts
+marketplace.com/store/shoeking
+marketplace.com/store/fashionhouse
+Optional:
+
+shoeking.com
+shoeking.marketplace.com
+Wholesale Storefronts
+marketplace.com/wholesale/abcimports
+marketplace.com/wholesale/chinashoesbd
+Visible only to reseller accounts.
+
+Roles
+Consumer
+
+Reseller
+
+Supplier
+
+Supplier + Reseller
+
+Admin
+Core nopCommerce Usage
+Use native:
+
+Customers
+
+Vendors
+
+Products
+
+Orders
+
+ACL
+
+Customer Roles
+
+Specifications
+
+Attributes
+
+Messaging
+
+Discounts
+
+Shipping
+
+Payments
+
+Build plugins for:
+
+Storefronts
+
+Wholesale marketplace
+
+Dropshipping
+
+Escrow
+
+Wallet
+
+Commission
+
+Preorder
+
+Domain mapping
+
+Theme builder
+
+This keeps you very close to upstream nopCommerce, making future upgrades much easier while still delivering an AliExpress-style seller storefront system with optional custom domains and supplier wholesale portals.
+
+
+  yes 
+create a full development plan 
+that includes our objective and pathway 
+so that my ai code agent understand the whole picture then the ai can each piece and make detail plan and implement to achive the final goal . 
+
+Project Vision: Unified B2B + B2C Marketplace Platform on nopCommerce
+1. Executive Summary
+Build a scalable multi-sided commerce platform using nopCommerce as the core commerce engine.
+
+The platform combines:
+
+B2B Wholesale Marketplace
+
+B2C Marketplace
+
+Dropshipping
+
+Preorder Commerce
+
+Escrow Payments
+
+Multi-Vendor Commerce
+
+Storefront-as-a-Service
+
+The system must remain as close as possible to standard nopCommerce architecture.
+
+Primary Rule
+Do not modify nopCommerce core source code unless absolutely unavoidable.
+
+Use:
+
+Plugins
+
+Event Consumers
+
+Dependency Injection
+
+Custom Services
+
+Custom Controllers
+
+Custom Database Tables
+
+Widget Zones
+
+Custom Themes
+
+Goal:
+
+Allow continuous upgrades from future nopCommerce releases with minimal merge effort.
+
+2. Business Objectives
+Objective 1
+Allow suppliers/importers/dealers to publish wholesale products.
+
+Examples:
+
+China Importers
+
+Manufacturers
+
+Distributors
+
+Wholesalers
+
+Objective 2
+Allow resellers to operate branded storefronts.
+
+Examples:
+
+ShoeKing
+
+FashionHouse
+
+MobileMart
+
+Resellers can:
+
+Sell own inventory
+
+Sell supplier inventory
+
+Dropship supplier inventory
+
+Accept preorders
+
+Objective 3
+Consumers only see storefront brands.
+
+Consumers never see:
+
+Supplier pricing
+
+Supplier identity
+
+Wholesale information
+
+unless specifically allowed.
+
+Objective 4
+Create an ecosystem similar to:
+
+Alibaba (wholesale)
+
+AliExpress (seller storefronts)
+
+Daraz (marketplace)
+
+Shopify (store branding)
+
+Amazon Marketplace (multi-vendor)
+
+inside one platform.
+
+3. Core Business Actors
+Consumer
+Can:
+
+Browse products
+
+Browse storefronts
+
+Place orders
+
+Track orders
+
+Cannot:
+
+Access wholesale marketplace
+
+Supplier
+Can:
+
+Create wholesale listings
+
+Manage stock
+
+Configure MOQ
+
+Enable dropshipping
+
+Enable preorder
+
+Can also become reseller.
+
+Reseller
+Can:
+
+Create storefront
+
+Customize branding
+
+Import supplier products
+
+Sell own products
+
+Dropship supplier products
+
+Supplier + Reseller
+Single account.
+
+Can operate both businesses.
+
+Admin
+Controls:
+
+Approval workflows
+
+Commission
+
+Escrow
+
+Disputes
+
+Fraud controls
+
+4. Architectural Principles
+Principle 1
+Use native nopCommerce features first.
+
+Examples:
+
+Customers
+
+Vendors
+
+Products
+
+Categories
+
+Attributes
+
+ACL
+
+Permissions
+
+Orders
+
+Payments
+
+Shipping
+
+Discounts
+
+Principle 2
+Plugins contain all marketplace logic.
+
+Principle 3
+Avoid product duplication whenever possible.
+
+Use mapping tables.
+
+Principle 4
+Support thousands of storefronts from one installation.
+
+Principle 5
+Support horizontal scaling.
+
+Future-ready for:
+
+Multiple application servers
+
+Redis
+
+RabbitMQ
+
+CDN
+
+Object Storage
+
+5. High Level System Modules
+Module 1
+Marketplace.Core
+
+Contains:
+
+Shared interfaces
+
+Shared services
+
+Shared entities
+
+Event definitions
+
+Dependency for all plugins.
+
+Module 2
+Marketplace.Business
+
+Manages:
+
+Supplier profiles
+
+Reseller profiles
+
+Verification
+
+Business documents
+
+Module 3
+Marketplace.Storefront
+
+Manages:
+
+Storefront creation
+
+Branding
+
+Theme configuration
+
+Domain mapping
+
+Module 4
+Marketplace.Wholesale
+
+Manages:
+
+Wholesale catalog
+
+Supplier marketplace
+
+MOQ
+
+Wholesale conditions
+
+Module 5
+Marketplace.Reseller
+
+Manages:
+
+Product import
+
+Reseller catalog
+
+Pricing rules
+
+Module 6
+Marketplace.Dropship
+
+Manages:
+
+Fulfillment requests
+
+Supplier notifications
+
+Shipment tracking
+
+Module 7
+Marketplace.Preorder
+
+Manages:
+
+Lead time
+
+Preorder inventory
+
+Reservation logic
+
+Module 8
+Marketplace.Escrow
+
+Manages:
+
+Payment holding
+
+Release workflow
+
+Refund workflow
+
+Module 9
+Marketplace.Commission
+
+Manages:
+
+Revenue sharing
+
+Supplier earnings
+
+Platform earnings
+
+Module 10
+Marketplace.Wallet
+
+Manages:
+
+Internal balances
+
+Withdrawals
+
+Adjustments
+
+Module 11
+Marketplace.Admin
+
+Admin dashboards.
+
+6. Storefront Architecture
+Standard Storefront
+Example:
+
+/store/shoeking
+
+/store/mobilemart
+
+/store/fashionhouse
+
+Optional Subdomain
+shoeking.platform.com
+
+mobilemart.platform.com
+
+Optional Custom Domain
+shoeking.com
+
+mobilemart.com
+
+Storefront Features
+Logo
+
+Banner
+
+About Us
+
+Policies
+
+Featured Categories
+
+Featured Products
+
+Social Links
+
+Ratings
+
+Reviews
+
+Store Contact Information
+
+7. Wholesale Marketplace
+Wholesale storefronts:
+
+/wholesale/abcimports
+
+/wholesale/chinatrading
+
+Visible only to approved resellers.
+
+Features:
+
+MOQ
+
+Wholesale price
+
+Bulk pricing
+
+Dropship support
+
+Preorder support
+
+Lead time
+
+8. Product Ownership Model
+Use native nopCommerce Product.
+
+Avoid cloning products.
+
+Create mappings.
+
+Supplier Product
+
+Product owned by supplier.
+
+Reseller Product
+
+Links supplier product to reseller catalog.
+
+Example:
+
+Supplier Product
+
+Nike Air Max
+
+Wholesale:
+500
+
+Reseller Mapping
+
+Retail:
+750
+
+Consumer sees:
+
+750
+
+Supplier remains hidden.
+
+9. Inventory Model
+Inventory Mode A
+
+Supplier Shared Stock
+
+Used for dropshipping.
+
+Inventory Mode B
+
+Reseller Owned Stock
+
+Local inventory.
+
+Inventory Mode C
+
+Hybrid
+
+Supplier stock + local stock.
+
+10. Order Flows
+Flow A
+Reseller Own Stock
+
+Consumer
+
+→ Reseller
+
+→ Shipment
+
+Flow B
+Dropshipping
+
+Consumer
+
+→ Reseller
+
+→ Supplier Fulfillment Order
+
+→ Supplier Ships
+
+Flow C
+Preorder
+
+Consumer
+
+→ Escrow
+
+→ Supplier Procurement
+
+→ Shipment
+
+→ Release Funds
+
+11. Escrow System
+Purpose:
+
+Protect consumers during preorder transactions.
+
+States:
+
+Pending
+
+Processing
+
+Shipped
+
+Delivered
+
+Released
+
+Refunded
+
+Disputed
+
+Funds held until release conditions are met.
+
+12. Commission Engine
+Example:
+
+Retail Price = 1000
+
+Wholesale Cost = 800
+
+Platform Fee = 50
+
+Supplier = 800
+
+Reseller = 150
+
+Platform = 50
+
+Supports:
+
+Fixed Fee
+
+Percentage Fee
+
+Category Fee
+
+Supplier Fee
+
+Store Fee
+
+13. Wallet System
+Wallet Types
+
+Supplier Wallet
+
+Reseller Wallet
+
+Platform Wallet
+
+Functions
+
+Earnings
+
+Withdrawals
+
+Refunds
+
+Escrow Transfers
+
+Manual Adjustments
+
+14. Database Design Strategy
+Use separate plugin tables.
+
+Never modify nopCommerce tables unless extension fields are unavoidable.
+
+Store custom entities separately.
+
+Reference:
+
+CustomerId
+
+VendorId
+
+ProductId
+
+OrderId
+
+StoreId
+
+using foreign keys.
+
+15. Theme System
+Level 1
+
+Theme Selection
+
+Level 2
+
+Theme Configuration
+
+Logo
+
+Color
+
+Typography
+
+Homepage Sections
+
+Level 3
+
+Page Builder
+
+Drag-and-drop blocks.
+
+16. Search Architecture
+Search Results Include:
+
+Products
+
+Stores
+
+Brands
+
+Categories
+
+Wholesale Products (reseller only)
+
+Use OpenSearch.
+
+17. Notification System
+Email
+
+SMS
+
+Push Notifications
+
+Events:
+
+New Order
+
+Dropship Request
+
+Preorder Update
+
+Withdrawal Request
+
+Escrow Release
+
+Store Approval
+
+Supplier Approval
+
+18. Scaling Architecture
+Application
+
+ASP.NET Core
+
+nopCommerce
+
+Database
+
+PostgreSQL
+
+Preferred
+
+Cache
+
+Redis
+
+Search
+
+OpenSearch
+
+Queue
+
+RabbitMQ
+
+Storage
+
+MinIO
+
+S3 Compatible
+
+CDN
+
+Cloudflare
+
+19. Security
+Role Based Access Control
+
+Audit Logging
+
+Business Verification
+
+KYC Support
+
+Vendor Approval
+
+Fraud Monitoring
+
+API Rate Limiting
+
+CSRF Protection
+
+File Validation
+
+20. Development Roadmap
+Phase 1
+
+Foundation
+
+Marketplace.Core
+
+Business Profiles
+
+Storefronts
+
+Domain Mapping
+
+Goal:
+Storefront marketplace operational.
+
+Phase 2
+
+Wholesale Marketplace
+
+Supplier Portal
+
+Wholesale Catalog
+
+Reseller Access
+
+Goal:
+Wholesale trading operational.
+
+Phase 3
+
+Reseller Integration
+
+Product Import
+
+Pricing Rules
+
+Store Branding
+
+Goal:
+Retail selling operational.
+
+Phase 4
+
+Dropshipping
+
+Fulfillment Orders
+
+Supplier Shipping
+
+Goal:
+Dropshipping operational.
+
+Phase 5
+
+Preorder + Escrow
+
+Escrow Wallet
+
+Release Rules
+
+Goal:
+Safe preorder commerce.
+
+Phase 6
+
+Commission + Wallet
+
+Earnings
+
+Withdrawals
+
+Goal:
+Financial ecosystem operational.
+
+Phase 7
+
+Search + Scale
+
+OpenSearch
+
+Redis
+
+RabbitMQ
+
+Goal:
+Enterprise scalability.
+
+Final Success Criteria
+A supplier can:
+
+Import products
+
+Sell wholesale
+
+Enable dropshipping
+
+Enable preorder
+
+A reseller can:
+
+Open a branded storefront
+
+Use custom domain
+
+Sell supplier products
+
+Sell own products
+
+Dropship
+
+Accept preorder
+
+A consumer can:
+
+Shop from branded stores
+
+Never see wholesale complexity
+
+Trust preorder transactions via escrow
+
+All of this operates from a single nopCommerce installation with minimal core modifications and maximum compatibility with future nopCommerce upgrades.
+
+This document is the master architecture specification. Your AI coding agent should treat it as the source of truth. The next step is to create a second document: a technical implementation blueprint that maps every module to specific nopCommerce extension points (plugins, services, controllers, event consumers, scheduled tasks, permissions, widget zones, database migrations, and UI areas). That blueprint becomes the actual development backlog and implementation sequence.
+
+
+
+Pasted text.txt
+Document
+ what do you think of this update
+
+I think this update is a major improvement over the previous version. It reads much more like something a senior nopCommerce architect would produce.
+
+The strongest improvements are:
+
+1. Single Store + Dynamic Storefront Routing
+This is probably the most important architectural decision.
+
+Your previous design was moving toward using nopCommerce Multi-Store for reseller storefronts.
+
+The updated plan correctly identifies that:
+
+nopCommerce Store != Seller Storefront
+
+A nopCommerce Store carries:
+
+settings
+
+localization
+
+caching
+
+themes
+
+permissions
+
+configuration
+
+Creating thousands of nopCommerce stores would eventually become painful.
+
+Using:
+
+platform.com/store/shoeking
+shoeking.platform.com
+shoeking.com
+mapped to VendorId is much cleaner.
+
+This is exactly how large marketplaces tend to work.
+
+2. Light Cloning is Better Than Pure Mapping
+This is the second biggest improvement.
+
+Originally we discussed:
+
+Supplier Product
+    ↓
+Mapping
+    ↓
+Reseller Product
+without creating real product records.
+
+In theory elegant.
+
+In practice painful.
+
+Because nopCommerce internally expects:
+
+products
+
+prices
+
+inventory
+
+search indexes
+
+discounts
+
+specifications
+
+filtering
+
+to be Product entities.
+
+The Light Cloning model:
+
+Supplier Product
+       ↓
+Clone
+       ↓
+Reseller Product
+with:
+
+DropshipMapping
+is much more practical.
+
+You gain:
+
+native search
+
+native category filtering
+
+native SEO
+
+native discounts
+
+native checkout
+
+without fighting nopCommerce.
+
+This is likely the correct choice.
+
+3. OrderSplitter Plugin
+Excellent decision.
+
+Because eventually you'll get carts like:
+
+Supplier A Dropship Product
+
+Supplier B Dropship Product
+
+Reseller Local Product
+
+Preorder Product
+One order cannot represent all those workflows cleanly.
+
+The MarketplaceOrderGroup concept is exactly how I'd approach it.
+
+4. Theme Context Override
+This is smarter than creating hundreds of physical themes.
+
+Instead:
+
+Master Theme
++
+Vendor Theme Settings
+stored in database.
+
+This is how Shopify works internally.
+
+The theme becomes:
+
+layout
+widgets
+blocks
+and branding comes from DB.
+
+Far easier to maintain.
+
+What I Would Change
+A. Vendor vs Business Entity
+The document still treats Vendor as the central business entity.
+
+I would add:
+
+MarketplaceBusiness
+(
+    Id,
+
+    VendorId,
+
+    BusinessType,
+
+    VerificationLevel,
+
+    SubscriptionPlan
+)
+Reason:
+
+nopCommerce Vendor was designed for:
+
+Vendor A
+Vendor B
+Vendor C
+not:
+
+Supplier
+Reseller
+Supplier+Reseller
+You may eventually want more business metadata.
+
+B. Subscription / SaaS Billing
+I would add a future module.
+
+Marketplace.Subscription
+because storefronts eventually become monetizable.
+
+Examples:
+
+Free
+
+Basic
+
+Professional
+
+Enterprise
+
+with:
+
+custom domain
+
+storefront themes
+
+API access
+
+extra products
+
+This can become a major revenue source.
+
+C. Storefront Builder
+Your current plan has:
+
+Logo
+Color
+CSS
+I would already plan for:
+
+Page Builder
+database structure.
+
+Something like:
+
+StorefrontPage
+StorefrontBlock
+StorefrontTemplate
+even if implemented later.
+
+Otherwise you'll redesign storefronts again.
+
+D. Vendor SEO
+Huge future issue.
+
+Suppose:
+
+500 stores
+all sell:
+
+Nike Air Max
+You will create:
+
+500 product pages
+with duplicate content.
+
+You need a future SEO strategy:
+
+canonical URLs
+
+reseller-specific descriptions
+
+AI-generated content
+
+store-specific landing pages
+
+Otherwise Google may treat many pages as duplicates.
+
+E. Inventory Sync Rules
+The RabbitMQ sync model is good.
+
+But define conflict rules now.
+
+Example:
+
+Supplier stock:
+
+100
+Reseller reserve:
+
+20
+Consumer order:
+
+5
+Need explicit rules for:
+
+stock ownership
+
+overselling
+
+reservation
+
+preorder stock
+
+before coding starts.
+
+Overall Rating
+For a startup marketplace:
+
+Previous version: 7.5/10
+
+For a serious multi-year marketplace platform:
+
+Updated version: 9/10
+
+The only thing still missing before implementation is a detailed Domain-Driven Design (DDD) specification defining:
+
+Bounded Contexts
+Catalog
+
+Wholesale
+
+Storefront
+
+Dropship
+
+Escrow
+
+Wallet
+
+Commission
+
+Fulfillment
+
+Aggregate Roots
+MarketplaceBusiness
+
+Storefront
+
+SupplierProduct
+
+ResellerProduct
+
+MarketplaceOrderGroup
+
+EscrowTransaction
+
+WalletAccount
+
+Events
+SupplierStockChanged
+ProductCloned
+ResellerPriceChanged
+MarketplaceOrderCreated
+DropshipOrderCreated
+ShipmentDelivered
+EscrowReleased
+WithdrawalRequested
+Once that DDD layer exists, an AI coding agent can generate plugins module-by-module with much less risk of architectural drift.
+
+
+PROJECT BLUEPRINT: Unified B2B + B2C Marketplace Platform on nopCommerce
+
+Executive Summary
+Build an enterprise-grade, highly scalable multi-sided commerce platform using nopCommerce as the foundational commerce engine. The system integrates B2B Wholesale, B2C Retail, Dropshipping, Preorders, Escrow, and Storefront-as-a-Service into a single unified ecosystem.
+The Golden Rule
+Zero modification of nopCommerce core source code.
+All functionality will be implemented via:
+Custom Plugins
+Event Consumers (IEventConsumer)
+Dependency Injection (overriding default services like IOrderProcessingService)
+Custom Action Filters and Action Results
+Custom Database Tables (with FKs to core tables)
+Widget Zones and UI overriding
+Custom ViewEngines and IThemeContext overrides
+Goal: Ensure 100% upgradeability with future nopCommerce releases with minimal merge effort.
+
+Business Objectives
+Objective 1 (Wholesale): Allow suppliers/manufacturers/importers to publish wholesale products with MOQs and dropship rules.
+Objective 2 (Retail/SaaS): Allow resellers to operate branded, fully customized storefronts (e.g., shoe-king.com).
+Objective 3 (Privacy): Absolute separation of B2B and B2C. Consumers never see wholesale pricing, supplier identities, or marketplace mechanics.
+Objective 4 (Ecosystem): Combine the models of Alibaba (B2B), Shopify (SaaS Storefronts), and AliExpress (Dropship/Preorder) inside one nopCommerce instance.
+
+Core Business Actors
+Consumer: Browses B2C storefronts, places orders, tracks shipments. Restricted from all B2B areas via ACL.
+Supplier: Accesses B2B portal. Creates wholesale listings, manages global stock, enables dropshipping/preorders, fulfills orders.
+Reseller: Accesses B2B portal to source products, and B2C admin to manage their branded storefront, margins, and custom inventory.
+(Note: A single account can act as both Supplier and Reseller).
+Platform Admin: Manages verifications, escrow disputes, payout approvals, and global settings.
+
+Architectural Principles & NopCommerce "Gotchas"
+Principle 1: Multi-Vendor Over Multi-Store: Standard nopCommerce Store entities consume significant memory (caching settings per store). To support 10,000+ resellers, we will run a Single nopCommerce Store. Storefront separation will be handled via a custom Routing Engine mapping subdomains/domains to the native nopCommerce Vendor entity.
+Principle 2: DI Override for Core Flows: We will override core services (e.g., Cart Validation, Order Processing) via Dependency Injection to handle marketplace-specific logic.
+Principle 3: Horizontally Scalable: The architecture assumes load-balanced app servers, distributed caching, external object storage, and message queues from Day 1.
+
+High-Level System Modules (Plugins)
+Marketplace.Core: Shared interfaces, domain entities, standard events, and utilities. Dependency for all other plugins.
+Marketplace.Business: Vendor onboarding, KYC/Verification workflows, document uploads, and ACL role assignment.
+Marketplace.Storefront: Custom URL routing (IRouteProvider), dynamic theme context overrides, and domain mapping.
+Marketplace.Wholesale: B2B catalog access, MOQ logic, bulk pricing tables, and supplier visibility rules.
+Marketplace.Reseller: Product sourcing logic, margin/markup calculators, and Reseller dashboard.
+Marketplace.Dropship: Supplier notification system, fulfillment tracking, and API endpoints for supplier dispatch.
+Marketplace.Preorder: Lead-time calculators, preorder inventory buckets, and reservation statuses.
+Marketplace.Escrow: Order state machines, funds holding logic, refund/dispute workflows.
+Marketplace.Commission: Multi-tier fee calculators (fixed, percentage, category-specific) for revenue splitting.
+Marketplace.Wallet: Internal ledger for Platform, Supplier, and Reseller balances, and withdrawal requests.
+Marketplace.OrderSplitter: Logic to split mixed-carts into separate nopCommerce Order entities.
+Marketplace.ApiIntegration: REST/GraphQL APIs for large B2B suppliers to sync inventory and pull dropship orders automatically.
+
+Storefront & Routing Architecture
+To bypass standard memory limits while allowing custom branding:
+Routing Engine: Override IRouteProvider.
+Read incoming request: shoeking.com or shoeking.platform.com or platform.com/store/shoeking.
+Map URL to VendorId.
+Inject VendorId into the current request context.
+Theme Engine: Override IThemeContext.
+Instead of separate physical theme folders, use one "Master Marketplace Theme".
+Load Vendor-specific CSS variables (Logo, Primary Color, Font) from plugin tables and inject them into the header via Widget Zones based on the active VendorId.
+
+Product Ownership Model ("Light Cloning")
+Challenge: Heavy custom mapping tables for products will destroy nopCommerce search, cart, and price calculation performance.
+Solution: The "Light Cloning" Model.
+Supplier Product: Standard nopCommerce Product owned by Supplier Vendor. Invisible to B2C.
+Reseller Product: Standard nopCommerce Product owned by Reseller Vendor. Fully indexed by nopCommerce for fast search/checkout.
+The Link: A custom plugin table DropshipMapping (ResellerProductId -> SupplierProductId).
+Data Sync: When a Supplier updates their Base Cost or Stock, a RabbitMQ event fires to update the cloned Reseller Products based on the Reseller's configured margin rules.
+Benefit: B2C consumers experience native-speed search and checkout because the system queries native Product tables.
+
+Order Flows & Cart Splitting
+Because a consumer might add a dropshipped item (Supplier A), a local item (Reseller stock), and a Preorder item to one cart, we must split orders to maintain clean Escrow and Fulfillment data.
+The Workflow:
+Consumer checks out.
+Override IOrderProcessingService.PlaceOrderAsync.
+Analyze cart items via the DropshipMapping and Preorder tables.
+Auto-Split: Generate multiple native nopCommerce Order records and group them via a custom MarketplaceOrderGroup tracking ID.
+Order 1 (Dropship): Sent to Supplier A for fulfillment.
+Order 2 (Local): Sent to Reseller for self-fulfillment.
+Order 3 (Preorder): Placed into Escrow Holding State.
+
+Escrow System & State Machine
+Protects B2C consumers and ensures Suppliers only get paid upon successful delivery.
+Escrow States:
+Pending: Payment authorized, order placed.
+Funded: Payment captured into Platform Wallet. Order sent to Supplier/Reseller.
+Shipped: Tracking number uploaded.
+Delivered: Courier API confirms delivery.
+Released: Post-delivery grace period ends (e.g., 3 days). Funds moved to Supplier/Reseller Wallets.
+Disputed: Admin intervention required.
+
+Commission & Wallet Engine
+Example Transaction (Dropship):
+Reseller Retail Price: $1,000
+Supplier Wholesale Cost: $800
+Platform Fee (5% of Wholesale): $40
+Wallet Movements (Upon Escrow Release):
+Total Paid by Consumer: $1,000 (Held in Escrow)
+-> Transfer to Supplier Wallet:
+760
+(
+760(
+800 - $40 platform fee)
+-> Transfer to Reseller Wallet:
+200
+(
+200(
+1000 - $800 wholesale cost)
+-> Transfer to Platform Wallet: $40
+Wallets track virtual balances. Vendors request payouts (Withdrawals) which are approved by Admins and paid via bank transfer/payment gateway APIs.
+
+Database Design Strategy
+Rule: Never add columns to native tables (Order, Product, Customer).
+Execution: Create Plugin Tables using Entity Framework Core.
+Linking: Use Foreign Keys to core tables.
+Example: Marketplace_VendorProfile table has a VendorId column linking to standard nopCommerce Vendor.
+Example: Marketplace_EscrowTransaction table has an OrderId column linking to standard nopCommerce Order.
+
+Enterprise Scale Tech Stack
+App Application: ASP.NET Core (nopCommerce v4.60+)
+Database: PostgreSQL (Handles concurrent writes and marketplace transaction locks better than SQL Server).
+Cache: Redis (Distributed cache for settings, locales, and active Vendor contexts).
+Search Engine: OpenSearch. Native EF Core search will fail at scale. A RabbitMQ worker will sync Product data to OpenSearch for blazing-fast catalog filtering.
+Message Queue: RabbitMQ. Decouples heavy tasks (Order Splitting, OpenSearch indexing, Email sending, Mass stock updates).
+Object Storage: MinIO (S3 Compatible). Store product images, KYC documents, and storefront assets off-server using a custom IPictureService.
+CDN / WAF: Cloudflare.
+
+Security & Compliance
+Role-Based Access (ACL): Utilize native nopCommerce ACL to aggressively separate Registered (Consumers), Supplier, and Reseller roles.
+Idempotency: Escrow and Wallet ledger transactions must be idempotent to prevent double-crediting during network failures.
+Rate Limiting: Protect B2B API integrations and checkout flows.
+KYC / File Validation: Strict MIME-type checking for supplier tax/business document uploads in MinIO.
+
+Phased Development Roadmap
+Phase 1: Foundation & Data Model
+Setup PostgreSQL, Redis, MinIO, RabbitMQ.
+Create Marketplace.Core and Marketplace.Business.
+Implement Vendor ACL, Profiles, and "Light Cloning" logic for products.
+Goal: Backend data structures are solid.
+Phase 2: Storefront Routing & Retail UX
+Create Marketplace.Storefront.
+Implement custom routing (IRouteProvider) for single-store multi-vendor mapping.
+Implement dynamic IThemeContext CSS injection.
+Goal: Consumers can view different storefronts at different URLs.
+Phase 3: Wholesale B2B Marketplace
+Create Marketplace.Wholesale and Marketplace.Reseller.
+Build the B2B portal where resellers browse supplier catalogs and import ("Light Clone") them to their own stores.
+Goal: Resellers can build their catalogs from supplier inventory.
+Phase 4: Order Flow & Dropshipping
+Create Marketplace.OrderSplitter and Marketplace.Dropship.
+Override cart processing to split mixed orders.
+Generate Supplier Fulfillment workflows and tracking number uploads.
+Goal: Dropshipping transactions process end-to-end.
+Phase 5: Preorder, Escrow, and Financials
+Create Marketplace.Preorder, Marketplace.Escrow, Marketplace.Commission, Marketplace.Wallet.
+Implement the state machine holding funds until delivery.
+Goal: Safe financial ecosystem is operational.
+Phase 6: API & Enterprise Scale
+Create Marketplace.ApiIntegration for external supplier ERPs.
+Implement OpenSearch synchronization.
+Goal: System is ready for massive traffic and automated B2B suppliers.
+
+Final Success Criteria
+System Integrity: The platform can be upgraded to the next nopCommerce version simply by updating the core files and recompiling the custom plugins. No core merge conflicts.
+Performance: Serving 5,000+ distinct storefronts without crashing app memory limits, handled gracefully via dynamic routing.
+Actor Capabilities:
+Suppliers can silently power thousands of retailers.
+Resellers can run beautiful, customized domains with mixed inventory without touching code.
+Consumers experience a standard, fast, secure e-commerce checkout without knowing they are participating in a complex dropship matrix
+
+
+Close
+16. Domain-Driven Design (DDD) Specification
+Part 1: Bounded Contexts
+The system is divided into logical boundaries. Each context encapsulates its own rules, data, and ubiquitous language, interacting with others strictly via interfaces or Domain Events.
+1. Catalog Context
+Responsibility: Manages B2C product visibility, search indexing (OpenSearch), and the "Light Clone" mapping mechanism.
+Core Entities: Core Product, ProductCategory, ProductAttribute.
+Interactions: Listens to Wholesale Context for B2B catalog updates; publishes indexing events.
+2. Wholesale Context
+Responsibility: Manages the B2B marketplace ecosystem, restricting access via ACL, enforcing Minimum Order Quantities (MOQ), bulk pricing tiers, and supplier catalog visibility.
+Core Entities: Supplier Product Configurations, Tiered B2B Pricing.
+Interactions: Controls what the Reseller Context is allowed to "see" and import.
+3. Storefront Context
+Responsibility: Manages multi-tenant routing without core multi-store bloat. Handles domain mapping, theme resolution, and B2C branding.
+Core Entities: Domain Mapping Rules, Theme Configuration Variables.
+Interactions: Intercepts HTTP requests and forces the Catalog Context to filter by the active Reseller.
+4. Dropship Context
+Responsibility: Links Reseller sales to Supplier fulfillment capabilities. Handles order routing and dispatch coordination.
+Core Entities: Fulfillment Requests, Dropship Mappings.
+Interactions: Reacts to Order Creation, interacts with Fulfillment Context.
+5. Escrow Context
+Responsibility: Financial safety mechanism. Runs the State Machine that locks B2C consumer funds until conditions (like delivery) are met.
+Core Entities: Escrow Transaction, State Logs.
+Interactions: Listens to Fulfillment events; triggers Commission/Wallet events upon release.
+6. Wallet Context
+Responsibility: Internal ledger system tracking virtual balances, credits, debits, and lock states.
+Core Entities: Ledgers, Ledger Entries, Withdrawal Requests.
+Interactions: The ultimate source of truth for vendor balances.
+7. Commission Context
+Responsibility: The math engine. Calculates platform fees, supplier cuts, and reseller margins per transaction.
+Core Entities: Fee Schedules, Commission Rules.
+Interactions: Queried by the Escrow Context prior to releasing funds to Wallets.
+8. Fulfillment Context
+Responsibility: Tracking physical movement. Interacts with courier APIs and manual tracking inputs.
+Core Entities: Shipments, Delivery Proofs.
+Interactions: Triggers state changes in Escrow Context upon confirmed delivery.
+Part 2: Aggregate Roots
+In the context of our nopCommerce plugins, an Aggregate Root often wraps a core ID (VendorId, ProductId) along with custom EF Core tables to enforce transactional consistency.
+MarketplaceBusiness
+Bounded Context: Business / Core
+Description: The ultimate legal entity using the platform.
+State / Properties: BusinessId (PK), VendorId (Core FK), TaxId, VerificationStatus (Pending/Approved/Rejected), RoleType (Supplier, Reseller, Both).
+Behavior: ApproveKYC(), UpgradeToSupplier(), SuspendAccount().
+Storefront
+Bounded Context: Storefront
+Description: The branded frontend configuration for a Reseller.
+State / Properties: StorefrontId (PK), MarketplaceBusinessId, CustomDomain (e.g., shoeking.com), IsActive, ThemeVariables (JSON/Dictionary of colors, logos).
+Behavior: MapDomain(), UpdateBranding(), GoOffline().
+SupplierProduct
+Bounded Context: Wholesale
+Description: The master product offered to B2B buyers.
+State / Properties: SupplierProductId (PK), CoreProductId (Core FK), SupplierBusinessId, BaseWholesalePrice, MinimumOrderQuantity, IsDropshipEnabled, IsPreorderEnabled, LeadTimeDays.
+Behavior: UpdateWholesaleCost(), ToggleDropship(), AdjustLeadTime().
+ResellerProduct
+Bounded Context: Catalog / Dropship
+Description: The "Light Clone" linking a Reseller to a Supplier's inventory.
+State / Properties: ResellerProductId (PK), CoreProductId (Core FK - the customized clone), SupplierProductId (The source product), ResellerBusinessId, RetailMarginPolicy, SyncInventory (Boolean).
+Behavior: CalculateRetailPrice(), SyncStockFromSupplier(), DisconnectFromSupplier().
+MarketplaceOrderGroup
+Bounded Context: OrderSplitting
+Description: Represents a single B2C checkout session that was split into multiple core orders.
+State / Properties: OrderGroupId (PK), CheckoutTransactionId, ConsumerCustomerId (Core FK), TotalAmountPaid, ChildOrderIds (List of Core FKs).
+Behavior: AddSplitOrder(), MarkFullyProcessed().
+EscrowTransaction
+Bounded Context: Escrow
+Description: The financial hold tied to a specific split order.
+State / Properties: EscrowId (PK), CoreOrderId (Core FK), TotalLockedAmount, CurrentState (Pending, Funded, Shipped, Delivered, Released, Disputed), ReleaseDate.
+Behavior: Fund(), MarkShipped(), InitiateDispute(), ReleaseFunds().
+WalletAccount
+Bounded Context: Wallet
+Description: The financial ledger for a specific Marketplace Business.
+State / Properties: WalletId (PK), MarketplaceBusinessId, AvailableBalance, LockedBalance (Pending withdrawals), CurrencyCode.
+Behavior: Credit(), Debit(), LockFundsForWithdrawal(), ResolveWithdrawal().
+Note: Operations on WalletAccount must be strictly ACID compliant and idempotent.
+Part 3: Domain Events
+Events trigger cross-context communication using nopCommerce's IEventPublisher. They ensure the system remains decoupled.
+SupplierStockChanged
+Triggered By: Supplier updates inventory count on their core Product.
+Payload: SupplierProductId, NewStockQuantity, Timestamp.
+Subscribers:
+Catalog Context: Updates stock for all linked ResellerProduct clones.
+Search Worker: Queues OpenSearch re-indexing.
+ProductCloned
+Triggered By: Reseller clicks "Add to Store" on a B2B catalog item.
+Payload: SupplierProductId, ResellerBusinessId, NewCoreProductId (The generated clone).
+Subscribers:
+Dropship Context: Creates the ResellerProduct Aggregate linking the two IDs.
+Storefront Context: Makes the product visible in the Reseller's custom domain mapping.
+ResellerPriceChanged
+Triggered By: Reseller manually updates their retail price, or an automated margin rule triggers.
+Payload: ResellerProductId, OldPrice, NewPrice.
+Subscribers:
+Search Worker: Syncs the new price to OpenSearch for the B2C storefront frontend.
+MarketplaceOrderCreated
+Triggered By: Checkout completion, immediately after the custom Cart Splitter generates the child orders.
+Payload: MarketplaceOrderGroup Aggregate, List of CoreOrderIds.
+Subscribers:
+Dropship Context: Evaluates which child orders are Dropship vs Local stock.
+Escrow Context: Creates EscrowTransaction aggregates for the child orders.
+DropshipOrderCreated
+Triggered By: Dropship Context identifying a specific child order as a dropship requirement.
+Payload: CoreOrderId, SupplierBusinessId, ResellerBusinessId, Items.
+Subscribers:
+Fulfillment Context: Generates a pending fulfillment request in the Supplier's B2B portal.
+Notification Service: Emails Supplier "New Dropship Order Received".
+ShipmentDelivered
+Triggered By: Courier API webhook tracking success, or manual Supplier input.
+Payload: CoreOrderId, TrackingNumber, DeliveryTimestamp.
+Subscribers:
+Escrow Context: Progresses EscrowTransaction to Delivered state and starts the grace period countdown timer (e.g., 72 hours).
+Notification Service: Emails Consumer "Your order has arrived".
+EscrowReleased
+Triggered By: Grace period timer expiration without consumer dispute.
+Payload: EscrowId, CoreOrderId, TotalAmount.
+Subscribers:
+Commission Context: Calculates who gets what (Platform cut vs. Supplier cut vs. Reseller cut).
+Wallet Context: (Chained from Commission) Credits the respective WalletAccount balances.
+WithdrawalRequested
+Triggered By: Vendor requests a payout from their dashboard.
+Payload: WalletId, MarketplaceBusinessId, RequestedAmount, PayoutMethod.
+Subscribers:
+Wallet Context: Moves funds from AvailableBalance to LockedBalance.
+Admin Context: Flags the request in the Platform Admin dashboard for final manual/API bank payout approval.

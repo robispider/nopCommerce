@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Storefront Engine",
+  "SystemName": "Marketplace.Storefront",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 3,
+  "FileName": "Nop.Plugin.Marketplace.Storefront.dll",
+  "Description": "Dynamic routing, domain mapping, and theme injection engine for Reseller storefronts."
+}

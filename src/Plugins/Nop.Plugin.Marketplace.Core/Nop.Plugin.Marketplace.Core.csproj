@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Copyright>Copyright © YourCompany</Copyright>
+    <Company>YourCompany</Company>
+    <Authors>Your Development Team</Authors>
+    <PackageLicenseUrl></PackageLicenseUrl>
+    <PackageProjectUrl>http://www.yourcompany.com/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/yourcompany/repo</RepositoryUrl>
+    <RepositoryType>Git</RepositoryType>
+    <!-- Updated path based on official documentation -->
+    <OutputPath>$(SolutionDir)\Presentation\Nop.Web\Plugins\Marketplace.Core</OutputPath>
+    <OutDir>$(OutputPath)</OutDir>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Use Nop.Web.Framework instead of Nop.Core/Data directly, as per the new docs -->
+    <ProjectReference Include="$(SolutionDir)\Presentation\Nop.Web.Framework\Nop.Web.Framework.csproj" />
+    <ClearPluginAssemblies Include="$(SolutionDir)\Build\ClearPluginAssemblies.proj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- This target executes after "Build" target to delete unnecessary libraries -->
+  <Target Name="NopTarget" AfterTargets="Build">
+    <MSBuild Projects="@(ClearPluginAssemblies)" Properties="PluginPath=$(OutDir)" Targets="NopClear" />
+  </Target>
+</Project>

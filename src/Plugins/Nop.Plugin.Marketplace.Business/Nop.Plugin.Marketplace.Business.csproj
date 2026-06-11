@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Copyright>Copyright © YourCompany</Copyright>
+    <Company>YourCompany</Company>
+    <Authors>Your Development Team</Authors>
+    <OutputPath>$(SolutionDir)\Presentation\Nop.Web\Plugins\Marketplace.Business</OutputPath>
+    <OutDir>$(OutputPath)</OutDir>
+    <!-- Set to true so the Minio DLL gets copied into the plugin folder -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Official MinIO C# Client -->
+    <PackageReference Include="Minio" Version="6.0.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(SolutionDir)\Presentation\Nop.Web.Framework\Nop.Web.Framework.csproj" />
+    <ProjectReference Include="..\Nop.Plugin.Marketplace.Core\Nop.Plugin.Marketplace.Core.csproj" />
+    <ClearPluginAssemblies Include="$(SolutionDir)\Build\ClearPluginAssemblies.proj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Remove="Views\**\*.cshtml" />
+    <Content Include="Views\**\*.cshtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  
+  <ItemGroup>
+    <Folder Include="Views\AdminDashboard\" />
+    <Folder Include="Views\AccountMenu\" />
+    <Folder Include="Views\MarketplaceKyc\" />
+  </ItemGroup>
+
+  <Target Name="NopTarget" AfterTargets="Build">
+    <MSBuild Projects="@(ClearPluginAssemblies)" Properties="PluginPath=$(OutDir)" Targets="NopClear" />
+  </Target>
+</Project>
