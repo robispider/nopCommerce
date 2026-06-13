@@ -56,13 +56,16 @@ namespace Nop.Plugin.Marketplace.Accounting.Data
             Create.TableFor<JournalEntry>();
             Create.TableFor<JournalEntryLine>();
 
-            // Insert Default Chart of Accounts automatically on installation
+            // ALIBABA-GRADE: Comprehensive Default Chart of Accounts (CoA)
             Insert.IntoTable(nameof(GlAccount)).Row(new { AccountCode = "1000", Name = "Gateway Clearing Account", AccountTypeId = 10, IsActive = true });
             Insert.IntoTable(nameof(GlAccount)).Row(new { AccountCode = "1010", Name = "Corporate Bank Account", AccountTypeId = 10, IsActive = true });
             Insert.IntoTable(nameof(GlAccount)).Row(new { AccountCode = "2000", Name = "Escrow Liability (Unsettled)", AccountTypeId = 20, IsActive = true });
             Insert.IntoTable(nameof(GlAccount)).Row(new { AccountCode = "2010", Name = "Vendor Payables (Wallet Available)", AccountTypeId = 20, IsActive = true });
             Insert.IntoTable(nameof(GlAccount)).Row(new { AccountCode = "2020", Name = "Vendor Rolling Reserve", AccountTypeId = 20, IsActive = true });
             Insert.IntoTable(nameof(GlAccount)).Row(new { AccountCode = "4000", Name = "Marketplace Commission Revenue", AccountTypeId = 40, IsActive = true });
+
+            // NEW: Platform Loss / Refund Expense Account
+            Insert.IntoTable(nameof(GlAccount)).Row(new { AccountCode = "5000", Name = "Refund & Loss Expense", AccountTypeId = 50, IsActive = true });
         }
     }
 }

@@ -10,8 +10,10 @@
   <ItemGroup>
     <ProjectReference Include="$(SolutionDir)\Presentation\Nop.Web.Framework\Nop.Web.Framework.csproj" />
     <ProjectReference Include="..\Nop.Plugin.Marketplace.Core\Nop.Plugin.Marketplace.Core.csproj" />
-    <!-- ADD THIS LINE: -->
     <ProjectReference Include="..\Nop.Plugin.Marketplace.Escrow\Nop.Plugin.Marketplace.Escrow.csproj" />
+    <!-- ADD THIS LINE: Dynamic Commission Integration -->
+    <ProjectReference Include="..\Nop.Plugin.Marketplace.Commission\Nop.Plugin.Marketplace.Commission.csproj" />
+    
     <ClearPluginAssemblies Include="$(SolutionDir)\Build\ClearPluginAssemblies.proj" />
   </ItemGroup>
 

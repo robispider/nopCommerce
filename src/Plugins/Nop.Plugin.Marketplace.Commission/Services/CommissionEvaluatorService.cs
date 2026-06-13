@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,8 +6,9 @@ using Nop.Core.Caching;
 using Nop.Data;
 using Nop.Plugin.Marketplace.Commission.Domains;
 using Nop.Plugin.Marketplace.Commission.Domains.Enums;
+using Nop.Plugin.Marketplace.Commission.Settings; // Inject settings
 using Nop.Plugin.Marketplace.Order.Domains;
-using Nop.Plugin.Marketplace.Dropship.Domains; // Needs access to Dropship Ticket for Wholesale Price
+using Nop.Plugin.Marketplace.Dropship.Domains;
 using Nop.Plugin.Marketplace.Core.Domains;
 using Nop.Services.Catalog;
 using Nop.Services.Orders;
@@ -24,26 +25,32 @@ namespace Nop.Plugin.Marketplace.Commission.Services
         private readonly IOrderService _orderService;
         private readonly IProductService _productService;
         private readonly ICategoryService _categoryService;
-        private readonly IStaticCacheManager _staticCacheManager; // Caching for extreme performance
+        private readonly IStaticCacheManager _staticCacheManager;
+        private readonly ILocker _locker; // Add distributed locking
+        private readonly MarketplaceCommissionSettings _commissionSettings; // Add dynamic settings
 
         public CommissionEvaluatorService(
             IRepository<CommissionRule> ruleRepository,
-            IRepository<CommissionSplit> splitRepository,
-            IRepository<MarketplaceOrderAllocation> allocationRepository,
-            IRepository<DropshipFulfillment> dropshipRepository,
-            IOrderService orderService,
-            IProductService productService,
-            ICategoryService categoryService,
-            IStaticCacheManager staticCacheManager)
+            IRepository<CommissionSplit> _splitRepository,
+            IRepository<MarketplaceOrderAllocation> _allocationRepository,
+            IRepository<DropshipFulfillment> _dropshipRepository,
+            IOrderService _orderService,
+            IProductService _productService,
+            ICategoryService _categoryService,
+            IStaticCacheManager _staticCacheManager,
+            ILocker locker,
+            MarketplaceCommissionSettings commissionSettings)
         {
-            _ruleRepository = ruleRepository;
-            _splitRepository = splitRepository;
-            _allocationRepository = allocationRepository;
-            _dropshipRepository = dropshipRepository;
-            _orderService = orderService;
-            _productService = productService;
-            _categoryService = categoryService;
-            _staticCacheManager = staticCacheManager;
+            this._ruleRepository = ruleRepository;
+            this._splitRepository = _splitRepository;
+            this._allocationRepository = _allocationRepository;
+            this._dropshipRepository = _dropshipRepository;
+            this._orderService = _orderService;
+            this._productService = _productService;
+            this._categoryService = _categoryService;
+            this._staticCacheManager = _staticCacheManager;
+            this._locker = locker;
+            this._commissionSettings = commissionSettings;
         }
 
         public async Task<CommissionSplitResult> CalculateSplitsAsync(int nativeOrderId)
@@ -54,13 +61,18 @@ namespace Nop.Plugin.Marketplace.Commission.Services
                 return MapToResult(nativeOrderId, existingSplits.ToList());
             }
 
-            using (var scope = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled))
+            CommissionSplitResult finalResult = null;
+            string lockKey = $"marketplace_commission_lock_{nativeOrderId}";
+
+            // ALIBABA-GRADE: Use ILocker to prevent concurrent calculation attempts
+            await _locker.PerformActionWithLockAsync(lockKey, TimeSpan.FromSeconds(15), async () =>
             {
-                // Double check inside transaction
+                // Re-verify inside lock to prevent dirty reads
                 existingSplits = await _splitRepository.GetAllAsync(q => q.Where(s => s.NativeOrderId == nativeOrderId));
                 if (existingSplits.Any())
                 {
-                    return MapToResult(nativeOrderId, existingSplits.ToList());
+                    finalResult = MapToResult(nativeOrderId, existingSplits.ToList());
+                    return;
                 }
 
                 var nativeOrder = await _orderService.GetOrderByIdAsync(nativeOrderId);
@@ -69,11 +81,14 @@ namespace Nop.Plugin.Marketplace.Commission.Services
 
                 var allocations = await _allocationRepository.GetAllAsync(q => q.Where(a => a.MarketplaceOrderGroupId == nativeOrderId));
                 if (!allocations.Any())
-                    return new CommissionSplitResult();
+                {
+                    finalResult = new CommissionSplitResult();
+                    return;
+                }
 
                 var orderItems = await _orderService.GetOrderItemsAsync(nativeOrderId);
                 var productIds = orderItems.Select(oi => oi.ProductId).Distinct().ToArray();
-                
+
                 var products = await _productService.GetProductsByIdsAsync(productIds);
                 var productDict = products.ToDictionary(p => p.Id);
 
@@ -88,16 +103,18 @@ namespace Nop.Plugin.Marketplace.Commission.Services
                 var dropshipDict = dropshipTickets.ToDictionary(d => d.OrderItemId);
 
                 var activeRules = await GetActiveRulesCachedAsync();
-                
-                // Total Order Gateway Fee
-                decimal totalGatewayFee = Math.Round((nativeOrder.OrderTotal * 0.029m) + 0.30m, 2);
-                
+
+                // ALIBABA-GRADE: Calculate dynamic gateway fee using injected settings
+                decimal gatewayPercentage = _commissionSettings.GatewayFeePercentage / 100m;
+                decimal totalGatewayFee = Math.Round((nativeOrder.OrderTotal * gatewayPercentage) + _commissionSettings.GatewayFeeFixed, 2);
+
                 var createdSplits = new List<CommissionSplit>();
 
                 foreach (var allocation in allocations)
                 {
                     var orderItem = orderItems.FirstOrDefault(oi => oi.Id == allocation.OrderItemId);
-                    if (orderItem == null) continue;
+                    if (orderItem == null)
+                        continue;
 
                     var product = productDict[orderItem.ProductId];
                     var productCategoryIds = productCategoryDict[product.Id];
@@ -106,7 +123,7 @@ namespace Nop.Plugin.Marketplace.Commission.Services
 
                     int sellingVendorId = dropshipTicket?.ResellerVendorId ?? allocation.VendorId;
 
-                    // 1. Evaluate Base Rule
+                    // 1. Evaluate Base Rule (SKU > Vendor > Category > Default)
                     var baseRule = activeRules
                         .Where(r => !r.IsModifier && IsRuleApplicable(r, sellingVendorId, product.Id, productCategoryIds))
                         .OrderBy(r => r.PriorityId)
@@ -150,7 +167,7 @@ namespace Nop.Plugin.Marketplace.Commission.Services
                         // Dropship
                         decimal wholesaleCost = dropshipTicket.LockedWholesalePrice * orderItem.Quantity;
                         supplierRevenue = Math.Round(wholesaleCost, 2);
-                        
+
                         resellerMargin = orderItem.PriceExclTax - itemGatewayFee - platformFee - supplierRevenue;
 
                         if (resellerMargin < 0)
@@ -186,15 +203,17 @@ namespace Nop.Plugin.Marketplace.Commission.Services
                     await _splitRepository.InsertAsync(splitRecord);
                     createdSplits.Add(splitRecord);
                 }
-                
-                scope.Complete();
-                return MapToResult(nativeOrderId, createdSplits);
-            }
+
+                finalResult = MapToResult(nativeOrderId, createdSplits);
+            });
+
+            return finalResult;
         }
 
         private CommissionSplitResult MapToResult(int nativeOrderId, List<CommissionSplit> splits)
         {
-            if (!splits.Any()) return new CommissionSplitResult();
+            if (!splits.Any())
+                return new CommissionSplitResult();
 
             return new CommissionSplitResult
             {
@@ -214,7 +233,7 @@ namespace Nop.Plugin.Marketplace.Commission.Services
             decimal totalFixed = baseRule.FixedAmount + modifiers.Sum(m => m.FixedAmount);
 
             if (totalPercentage < 0)
-                totalPercentage = 0; // Protect platform
+                totalPercentage = 0;
 
             return baseRule.CalculationTypeId switch
             {
@@ -239,7 +258,6 @@ namespace Nop.Plugin.Marketplace.Commission.Services
 
         private async Task<List<CommissionRule>> GetActiveRulesCachedAsync()
         {
-            // Highly optimized cache lookup to prevent DB spam on 100-item carts
             var cacheKey = _staticCacheManager.PrepareKeyForDefaultCache(new CacheKey("marketplace.commission.rules.active"));
 
             return await _staticCacheManager.GetAsync(cacheKey, async () =>

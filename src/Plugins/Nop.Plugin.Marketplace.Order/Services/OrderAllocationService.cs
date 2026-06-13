@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
+using Nop.Core.Domain.Orders;
 using Nop.Core.Events;
 using Nop.Data;
+using Nop.Plugin.Marketplace.Core.Domains;
 using Nop.Plugin.Marketplace.Inventory.Services;
 using Nop.Plugin.Marketplace.Order.Domains;
 using Nop.Plugin.Marketplace.Order.Domains.Enums;
@@ -16,7 +19,8 @@ namespace Nop.Plugin.Marketplace.Order.Services
     {
         private readonly IRepository<MarketplaceOrderGroup> _orderGroupRepository;
         private readonly IRepository<MarketplaceOrderAllocation> _allocationRepository;
-        private readonly IOrderService _orderService;
+        private readonly IRepository<ResellerProductMapping> _mappingRepository; // Inject mapping
+        private readonly IOrderService _orderService; // Inject order service for notes
         private readonly IProductService _productService;
         private readonly IInventoryReservationService _inventoryService;
         private readonly IEventPublisher _eventPublisher;
@@ -24,6 +28,7 @@ namespace Nop.Plugin.Marketplace.Order.Services
         public OrderAllocationService(
             IRepository<MarketplaceOrderGroup> orderGroupRepository,
             IRepository<MarketplaceOrderAllocation> allocationRepository,
+            IRepository<ResellerProductMapping> mappingRepository,
             IOrderService orderService,
             IProductService productService,
             IInventoryReservationService inventoryService,
@@ -31,6 +36,7 @@ namespace Nop.Plugin.Marketplace.Order.Services
         {
             _orderGroupRepository = orderGroupRepository;
             _allocationRepository = allocationRepository;
+            _mappingRepository = mappingRepository;
             _orderService = orderService;
             _productService = productService;
             _inventoryService = inventoryService;
@@ -52,28 +58,88 @@ namespace Nop.Plugin.Marketplace.Order.Services
 
             var items = await _orderService.GetOrderItemsAsync(nativeOrder.Id);
 
+            var temporaryReservations = new System.Collections.Generic.List<int>();
+            bool allocationSuccess = true;
+            string failureReason = string.Empty;
+
+            try
+            {
+                // PHASE 1: Soft-Reserve all items first (Two-Phase Commit)
+                foreach (var item in items)
+                {
+                    var product = await _productService.GetProductByIdAsync(item.ProductId);
+                    if (product == null)
+                        continue;
+
+                    var resellerVendorId = product.VendorId > 0 ? (int?)product.VendorId : null;
+                    int authoritativeProductId = product.Id;
+
+                    // FIX 1: Resolve the authoritative Supplier product ID if it's a reseller clone
+                    if (resellerVendorId.HasValue)
+                    {
+                        var mappingQuery = await _mappingRepository.GetAllAsync(query =>
+                            query.Where(m => m.ResellerCoreProductId == product.Id));
+
+                        var mapping = mappingQuery.FirstOrDefault();
+                        if (mapping != null)
+                        {
+                            authoritativeProductId = mapping.SupplierCoreProductId;
+                        }
+                    }
+
+                    // Soft reservation with a 15-minute TTL
+                    var reservation = await _inventoryService.ReserveStockAsync(
+                        authoritativeProductId,
+                        resellerVendorId,
+                        item.Id,
+                        item.Quantity,
+                        expiryMinutes: 15);
+
+                    temporaryReservations.Add(reservation.Id);
+                }
+
+                // PHASE 2: All soft reservations succeeded! Now firmly CONFIRM them.
+                foreach (var resId in temporaryReservations)
+                {
+                    await _inventoryService.ConfirmReservationAsync(resId);
+                }
+            }
+            catch (Exception ex)
+            {
+                allocationSuccess = false;
+                failureReason = ex.Message;
+
+                // ROLLBACK: Release any successfully created soft-reservations to prevent ghost leaks
+                foreach (var resId in temporaryReservations)
+                {
+                    await _inventoryService.ReleaseReservationAsync(resId);
+                }
+            }
+
+            // FIX 2: Handle post-checkout stock failures gracefully
+            if (!allocationSuccess)
+            {
+                group.StatusId = (int)MarketplaceOrderStatus.Cancelled;
+                await _orderGroupRepository.UpdateAsync(group);
+
+                // Add an internal audit note to the native order so the merchant is immediately alerted
+                await _orderService.InsertOrderNoteAsync(new OrderNote
+                {
+                    OrderId = nativeOrder.Id,
+                    Note = $"MARKETPLACE CRITICAL ERROR: Multi-vendor inventory allocation failed. Reason: {failureReason}. Order placed on hold.",
+                    DisplayToCustomer = false,
+                    CreatedOnUtc = DateTime.UtcNow
+                });
+
+                return group;
+            }
+
+            // PHASE 3: Write allocations only after successful stock verification
             foreach (var item in items)
             {
                 var product = await _productService.GetProductByIdAsync(item.ProductId);
-                if (product == null)
-                    continue;
+                var resellerVendorId = product?.VendorId > 0 ? (int?)product.VendorId : null;
 
-                var resellerVendorId = product.VendorId > 0 ? (int?)product.VendorId : null;
-
-                // 2. Firmly Reserve Inventory (Removes it from Available stock atomically)
-                // If this fails due to concurrency, it throws an exception, rolling back the transaction natively.
-                var reservation = await _inventoryService.ReserveStockAsync(
-                    product.Id,
-                    resellerVendorId,
-                    item.Id,
-                    item.Quantity,
-                    expiryMinutes: 0); // 0 means firm reservation immediately
-
-                await _inventoryService.ConfirmReservationAsync(reservation.Id);
-
-                // 3. Create the Allocation line
-                // In a highly advanced setup, FulfillmentMethod is determined by the AllocationRuleService.
-                // For MVP, if it has a Reseller, it's Dropship. If direct, Standard.
                 var allocation = new MarketplaceOrderAllocation
                 {
                     MarketplaceOrderGroupId = group.Id,
@@ -89,11 +155,10 @@ namespace Nop.Plugin.Marketplace.Order.Services
                 await _allocationRepository.InsertAsync(allocation);
             }
 
-            // 4. Update Status to Allocated
             group.StatusId = (int)MarketplaceOrderStatus.Allocated;
             await _orderGroupRepository.UpdateAsync(group);
 
-            // 5. Publish Event for Dropship & Escrow plugins to catch!
+            // Publish completed splits to Dropship, Escrow & Commission engines
             await _eventPublisher.PublishAsync(new OrderSplitCompletedEvent
             {
                 MarketplaceOrderGroupId = group.Id,

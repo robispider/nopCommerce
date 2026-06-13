@@ -153,7 +153,7 @@ namespace Nop.Plugin.Marketplace.Wallet.Services
                 if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == idempotencyKey))
                     return;
 
-                // Money leaves the platform permanently
+                // 1. Money leaves the platform permanently
                 await _ledgerRepository.InsertAsync(new WalletLedger
                 {
                     WalletAccountId = account.Id,
@@ -173,9 +173,17 @@ namespace Nop.Plugin.Marketplace.Wallet.Services
                 request.AdminNotes = adminNotes;
                 request.UpdatedOnUtc = DateTime.UtcNow;
                 await _withdrawalRepository.UpdateAsync(request);
+
+                // 2. ALIBABA-GRADE: Notify the Accounting ledger!
+                await _eventPublisher.PublishAsync(new WithdrawalApprovedEvent
+                {
+                    WithdrawalId = request.Id,
+                    VendorId = request.VendorId,
+                    Amount = request.Amount,
+                    PaymentMethod = "Bank Transfer" // Standard fallback, can be populated from request data
+                });
             });
         }
-
         public async Task RejectWithdrawalAsync(int withdrawalRequestId, string adminNotes = null)
         {
             var request = await _withdrawalRepository.GetByIdAsync(withdrawalRequestId);

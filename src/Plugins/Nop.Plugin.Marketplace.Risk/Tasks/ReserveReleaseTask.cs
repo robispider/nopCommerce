@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using Nop.Core.Caching; // Inject locker
+using Nop.Core.Events;
 using Nop.Data;
-using Nop.Plugin.Marketplace.Core.Domains;
 using Nop.Plugin.Marketplace.Core.Events;
 using Nop.Plugin.Marketplace.Risk.Domains;
+using Nop.Services.Events;
 using Nop.Services.ScheduleTasks;
 
 namespace Nop.Plugin.Marketplace.Risk.Tasks
@@ -13,12 +14,17 @@ namespace Nop.Plugin.Marketplace.Risk.Tasks
     public class ReserveReleaseTask : IScheduleTask
     {
         private readonly IRepository<ReserveSchedule> _scheduleRepository;
-        private readonly IRepository<OutboxMessage> _outboxRepository;
+        private readonly IEventPublisher _eventPublisher;
+        private readonly ILocker _locker;
 
-        public ReserveReleaseTask(IRepository<ReserveSchedule> scheduleRepository, IRepository<OutboxMessage> outboxRepository)
+        public ReserveReleaseTask(
+            IRepository<ReserveSchedule> scheduleRepository,
+            IEventPublisher eventPublisher,
+            ILocker locker)
         {
             _scheduleRepository = scheduleRepository;
-            _outboxRepository = outboxRepository;
+            _eventPublisher = eventPublisher;
+            _locker = locker;
         }
 
         public async Task ExecuteAsync()
@@ -29,22 +35,27 @@ namespace Nop.Plugin.Marketplace.Risk.Tasks
 
             foreach (var schedule in maturedSchedules)
             {
-                schedule.IsReleased = true;
-                await _scheduleRepository.UpdateAsync(schedule);
+                string lockKey = $"marketplace_reserve_release_{schedule.Id}";
 
-                var releaseEvent = new ReserveReleasedEvent
+                // ALIBABA-GRADE: Lock each schedule row so two concurrent release tasks never double-credit
+                await _locker.PerformActionWithLockAsync(lockKey, TimeSpan.FromSeconds(15), async () =>
                 {
-                    VendorId = schedule.VendorId,
-                    Amount = schedule.HeldAmount,
-                    ReserveScheduleId = schedule.Id,
-                    IdempotencyKey = $"RSV_REL_{schedule.Id}"
-                };
+                    // Reload record inside the lock to verify status
+                    var freshSchedule = await _scheduleRepository.GetByIdAsync(schedule.Id);
+                    if (freshSchedule == null || freshSchedule.IsReleased)
+                        return;
 
-                await _outboxRepository.InsertAsync(new OutboxMessage
-                {
-                    EventType = "Nop.Plugin.Marketplace.Core.Events.ReserveReleasedEvent",
-                    Payload = JsonConvert.SerializeObject(releaseEvent),
-                    CreatedOnUtc = DateTime.UtcNow
+                    freshSchedule.IsReleased = true;
+                    await _scheduleRepository.UpdateAsync(freshSchedule);
+
+                    // Publish the release event so the Wallet can credit available balances instantly
+                    await _eventPublisher.PublishAsync(new ReserveReleasedEvent
+                    {
+                        VendorId = freshSchedule.VendorId,
+                        Amount = freshSchedule.HeldAmount,
+                        ReserveScheduleId = freshSchedule.Id,
+                        IdempotencyKey = $"RSV_REL_{freshSchedule.Id}"
+                    });
                 });
             }
         }
