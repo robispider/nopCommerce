@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Commission Engine",
+  "SystemName": "Marketplace.Commission",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 8,
+  "FileName": "Nop.Plugin.Marketplace.Commission.dll",
+  "Description": "Evaluates tiered, vendor-specific, and SKU-level commission priority rules."
+}

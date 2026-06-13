@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Inventory Engine",
+  "SystemName": "Marketplace.Inventory",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 6,
+  "FileName": "Nop.Plugin.Marketplace.Inventory.dll",
+  "Description": "Multi-source inventory management with strict concurrency, reservations, and allocation rules."
+}

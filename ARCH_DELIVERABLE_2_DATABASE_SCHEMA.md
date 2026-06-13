@@ -2,6 +2,48 @@
 
 ---
 
+## ⚡ CURRENT IMPLEMENTATION STATUS
+
+**Last Assessed:** January 2025  
+**Completion:** 60% of planned schema (25/40 tables)
+
+| Table | Plugin | Status | Schema Verified | Indices | Gap |
+|-------|--------|--------|-----------------|---------|-----|
+| **MarketplaceBusiness** | Business | ✅ | VendorId, LegalName, TaxId, VerificationStatusId | ✅ | None |
+| **BusinessDocument** | Business | ✅ | VendorId, DocumentType, FilePath | ✅ | Storage: likely file-system, not MinIO |
+| **SupplierProduct** | Wholesale | ✅ | ProductId, VendorId, WholesalePrice, MOQ | ✅ | None |
+| **ResellerProductMapping** | Wholesale | ⚠️ Likely | Not fully verified | ? | Likely exists |
+| **EscrowTransaction** | Escrow | ✅ | CoreOrderId, SupplierVendorId, ResellerVendorId, CurrentStateId | ✅ | None |
+| **EscrowStateHistory** | Escrow | ✅ | Audit trail exists | ✅ | None |
+| **DropshipFulfillment** | Dropship | ✅ | OrderId, OrderItemId, SupplierVendorId, DropshipStatusId | ✅ | None |
+| **WalletAccount** | Wallet | ✅ | VendorId, AvailableBalance, PendingBalance, ReserveBalance, ConcurrencyVersion | ✅ | None |
+| **WalletLedger** | Wallet | ✅ | IdempotencyKey (UNIQUE - CRITICAL) | ✅ | None |
+| **WithdrawalRequest** | Wallet | ✅ | VendorId, Amount, StatusId | ✅ | None |
+| **JournalEntry** | Accounting | ✅ | IdempotencyKey (UNIQUE - CRITICAL) | ✅ | None |
+| **JournalEntryLine** | Accounting | ✅ | JournalEntryId, DebitAmount, CreditAmount | ✅ | None |
+| **GlAccount** | Accounting | ✅ | AccountCode (unique), AccountName, GlAccountType | ✅ | None |
+| **⚠️ OutboxMessage** | Core | ? | Not directly found; may use IEventPublisher abstraction | ? | Risk: Event sourcing not explicit |
+| **❌ MarketplaceOrderGroup** | Order | ❌ MISSING | | | BLOCKING: No multi-vendor order container |
+| **❌ MarketplaceOrderAllocation** | Order | ❌ MISSING | | | BLOCKING: No allocation tracking |
+| **❌ InventoryBucket** | Inventory | ❌ MISSING | | | BLOCKING: No stock tracking |
+| **❌ StockReservation** | Inventory | ❌ MISSING | | | BLOCKING: No reservation TTL |
+| **❌ CommissionRule** | Commission | ❌ MISSING | | | Cannot tier commission rates |
+| **❌ CommissionSplit** | Commission | ❌ MISSING | | | No immutable order-level tracking |
+| **❌ VendorReserveRule** | Risk | ⚠️ Partial | Likely incomplete | ? | Reserve logic not fully traced |
+| **❌ ChargebackCase** | Risk | ❌ MISSING | | | No chargeback deduction GL posting |
+| **❌ NotificationTemplate** | Notification | ❌ MISSING | | | No email/webhook infrastructure |
+| **❌ ApiWebhook** | ApiIntegration | ❌ MISSING | | | No external integration |
+
+**Key Findings:**
+- ✅ All critical financial tables exist with correct schema
+- ✅ IdempotencyKey unique constraints enforced (prevents double-posting)
+- ✅ ConcurrencyVersion on WalletAccount (optimistic locking)
+- ❌ Inventory system completely missing (BLOCKING for MVP)
+- ❌ Order grouping/allocation not implemented (multi-vendor orders impossible)
+- ⚠️ Commission tiering not modeled (currently hardcoded)
+
+---
+
 ## SCHEMA DESIGN OVERVIEW
 
 **Strategy:**

@@ -1,21 +1,22 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <OutputPath>$(SolutionDir)\Presentation\Nop.Web\Plugins\Marketplace.Escrow</OutputPath>
+    <Copyright>Copyright © YourCompany 2026</Copyright>
+    <Company>YourCompany</Company>
+    <Authors>Your Development Team</Authors>
+    <OutputPath>$(SolutionDir)\Presentation\Nop.Web\Plugins\Marketplace.Order</OutputPath>
     <OutDir>$(OutputPath)</OutDir>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Core UI Framework Reference -->
     <ProjectReference Include="$(SolutionDir)\Presentation\Nop.Web.Framework\Nop.Web.Framework.csproj" />
-
-    <!-- Shared Marketplace Core Reference -->
+    <ProjectReference Include="$(SolutionDir)\Presentation\Nop.Web\Nop.Web.csproj">
+      <Private>false</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Nop.Plugin.Marketplace.Core\Nop.Plugin.Marketplace.Core.csproj" />
-    <ProjectReference Include="..\Nop.Plugin.Marketplace.Order\Nop.Plugin.Marketplace.Order.csproj" />
-    <ProjectReference Include="..\Nop.Plugin.Marketplace.Commission\Nop.Plugin.Marketplace.Commission.csproj" />
-
+    <ProjectReference Include="..\Nop.Plugin.Marketplace.Inventory\Nop.Plugin.Marketplace.Inventory.csproj" />
     <ClearPluginAssemblies Include="$(SolutionDir)\Build\ClearPluginAssemblies.proj" />
   </ItemGroup>
 

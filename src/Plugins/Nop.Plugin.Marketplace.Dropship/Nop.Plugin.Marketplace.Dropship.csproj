@@ -14,7 +14,7 @@
     </ProjectReference>
     <ProjectReference Include="..\Nop.Plugin.Marketplace.Core\Nop.Plugin.Marketplace.Core.csproj" />
     <ProjectReference Include="..\Nop.Plugin.Marketplace.Wholesale\Nop.Plugin.Marketplace.Wholesale.csproj" />
-
+    <ProjectReference Include="..\Nop.Plugin.Marketplace.Order\Nop.Plugin.Marketplace.Order.csproj" />
     <ClearPluginAssemblies Include="$(SolutionDir)\Build\ClearPluginAssemblies.proj" />
   </ItemGroup>
 

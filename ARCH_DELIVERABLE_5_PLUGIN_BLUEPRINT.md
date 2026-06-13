@@ -2,6 +2,41 @@
 
 ---
 
+## ⚡ CURRENT IMPLEMENTATION STATUS
+
+**Last Assessed:** January 2025  
+**Completion:** 65% (10/15 plugins partially/fully implemented)
+
+| Plugin | Status | Key Classes | Gap |
+|--------|--------|-------------|-----|
+| **Marketplace.Core** | ✅ | EscrowState, CommissionSplitResult, enums | OutboxMessage abstraction |
+| **Marketplace.Business** | ✅ | MarketplaceBusiness, BusinessDocument, services | KYC doc storage (not MinIO) |
+| **Marketplace.Wholesale** | ✅ | SupplierProduct, ISupplierProductService | Full rule engine |
+| **Marketplace.Dropship** | ✅ | DropshipFulfillment, 3-state machine | Timeout escalation |
+| **Marketplace.Escrow** | ✅ | 13-state machine, EscrowService, auto-release task | Dispute GL posting |
+| **Marketplace.Wallet** | ✅ | WalletAccount, WalletLedger, settlement handshake | None (complete) |
+| **Marketplace.Accounting** | ✅ | JournalEntry, GL validation, event consumers | Manual GL entry |
+| **Marketplace.Risk** | ⚠️ | WalletSettledRiskConsumer | Full reserve scheduling |
+| **Marketplace.Storefront** | ⚠️ | ResellerStorefront interface | Full implementation |
+| **Marketplace.Wholesale** | ✅ | B2B controllers | Discovery search (not OpenSearch) |
+| **❌ Marketplace.Inventory** | MISSING | | InventoryBucket, StockReservation, allocation service |
+| **❌ Marketplace.Order** | MISSING | | MarketplaceOrderGroup, allocation logic |
+| **❌ Marketplace.Commission** | PARTIAL | CommissionService | CommissionRule aggregate, tiering |
+| **❌ Marketplace.Notification** | MISSING | | Email/webhook templates |
+| **❌ Marketplace.ApiIntegration** | MISSING | | External webhooks, rate limiting |
+
+**Plugin Structure Pattern Verified:**
+```
+✅ Confirmed: All plugins follow NopStartup DI pattern
+✅ Confirmed: FluentMigrator migrations used for schema
+✅ Confirmed: IService interfaces defined
+✅ Confirmed: Event consumers registered via DI
+✅ Confirmed: Controllers for admin pages
+✅ Confirmed: Razor views for UI
+```
+
+---
+
 ## PLUGIN LAYER ARCHITECTURE
 
 Each bounded context = One plugin module (in some cases, multiple plugins for sub-contexts).

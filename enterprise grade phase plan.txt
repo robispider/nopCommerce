@@ -1,0 +1,118 @@
+ ENTERPRISE MARKETPLACE IMPLEMENTATION PLAN
+Evaluation & Strategic Assessment
+You are absolutely correct: This is no longer a startup POC. The architecture you have built—specifically the two-phase commit settlement handshake, double-entry ledger validation, strict idempotency keys, and 13-state Escrow FSM—represents a Tier-1 Enterprise Financial Architecture.
+The schemas are solid. The foundation is bank-grade. The focus must now shift from Data Modeling to Behavioral Modeling (Application Services, Rules Engines, and Orchestration).
+Here is the Comprehensive Implementation Plan directly addressing the 9 Enterprise Gaps, structured into an execution roadmap.
+🏗️ PHASE 1: THE COMMERCE UNBLOCKERS (Gaps 1, 2, & 4)
+Focus: Getting the cart, order, and inventory to safely interact in a highly concurrent multi-vendor environment.
+1. Inventory Context Architecture (Gap 1)
+To answer your specific design questions for Marketplace.Inventory:
+Who is authoritative? Supplier Inventory is the Master. Reseller inventory is derived (unless the reseller physically pre-purchased the stock).
+Race Condition Resolution (Supplier=5, Reseller A sells 3, Reseller B sells 4):
+Inventory buckets must use Optimistic Concurrency (ConcurrencyVersion column).
+If A and B checkout simultaneously, B's transaction will throw a DbUpdateConcurrencyException. The system catches this, re-reads the stock (now 2), and rejects B's checkout with "Only 2 remaining".
+Reservation Timing:
+Add to Cart: NO reservation (too much stock hoarding).
+Enter Checkout (Payment Page): Soft Reservation (15-minute TTL via StockReservation table). AvailableQty decreases, ReservedQty increases.
+Payment Success: Firm Reservation. ReservedQty decremented, AvailableQty stays deducted.
+Order Cancelled / TTL Expires: AvailableQty restored.
+Inventory Sync (Event-Driven Push):
+Supplier updates stock natively -> SupplierStockChangedEvent published.
+InventorySyncConsumer listens -> Updates Supplier InventoryBucket.
+If SyncInventory = true on mappings -> Automatically updates linked Reseller InventoryBuckets.
+2. Marketplace Order Domain (Gap 2)
+The native nopCommerce Order is a B2C container. We must build the MarketplaceOrderGroup aggregate to sit alongside it.
+New Entities to Implement:
+MarketplaceOrderGroup: Links to native OrderId.
+MarketplaceOrderAllocation: Vendor-level split (already planned).
+OrderItemAllocation: Line-item level tracking (links OrderItemId to DropshipFulfillmentId).
+OrderFinancialSummary: Immutable snapshot of totals (Subtotal, Total Commission, Total Tax, Shipping, Gateway Fees).
+OrderFulfillmentSummary: Track aggregate states (e.g., 2 of 3 allocations shipped = "Partially Shipped").
+3. The Master Event Catalog (Gap 4)
+Implement a centralized EventRegistry to ensure all these services communicate predictably.
+Domain	Event	Trigger	Consumer(s)
+Wholesale	SupplierProductListed	Supplier enables wholesale	Search Indexer
+Inventory	InventoryChanged	Stock adjust / sync	Search Indexer, Storefront Cache
+Order	OrderAllocated	OrderGroup split complete	Inventory (Confirm), Fulfillment
+Fulfillment	DropshipTicketCreated	Allocation confirmed	Notification (Supplier)
+Fulfillment	ShipmentDelivered	Courier webhook/admin	Escrow (Starts Grace Period)
+Escrow	SettlementRequested	Grace period ends	Wallet, Accounting
+Wallet	WalletCredited	2-Phase commit success	Risk (Reserve calc), Accounting
+⚙️ PHASE 2: THE CORE ENGINES (Gaps 3, 8, & 9)
+Focus: Moving from CRUD to complex business logic execution.
+4. The Application Services Layer (Gap 3)
+These are the "Engines". You will build these specific interfaces and their implementations:
+IOrderAllocationService: Takes a native cart, reads ProcurementPolicies and InventoryBuckets, and generates the MarketplaceOrderGroup.
+IEscrowFundingService: Listens to payment success, locks funds.
+IWalletSettlementService: Contains the strict TransactionScope(Serializable) logic for the two-phase commit.
+IInventoryReservationService: Handles the 15-minute TTL logic and concurrency checks.
+5. Commission Rule Evaluator (Gap 9)
+The Commission Engine requires a strict Priority Resolution Matrix.
+Rule Evaluator Logic (Highest to Lowest Priority):
+SKU Override: Specific product has a negotiated rate (e.g., High-margin widget = 2%).
+Vendor Specific: Platform negotiated a custom rate for Vendor ID 123 (e.g., 4%).
+Category Specific: Electronics = 3%, Clothing = 7%.
+Tier Specific: Vendor sold >$10k this month (e.g., Volume discount = 4.5%).
+Global Default: Fallback (e.g., 5%).
+Implementation Plan: The ICommissionService.CalculateSplitAsync() will load all rules for the Vendor/Product, sort by the Priority enum above, take the first match, and generate an immutable CommissionSplitResult stored against the Order.
+6. Escrow FSM Implementation Matrix (Gap 8)
+Here is the strict transition matrix you must implement in your EscrowStateMachine:
+Current State	Valid Trigger Event	Next State	Financial Impact
+Created	OrderPaidEvent	Funded	None (Held in Escrow Liability GL)
+Funded	TicketAcceptedEvent	Processing	None
+Processing	TicketShippedEvent	Shipped	None
+Shipped	ShipmentDeliveredEvent	Delivered	None (Starts 72h Grace Period)
+Delivered	72h Timer Expires	SettlementPending	Triggers SettlementRequestedEvent
+Delivered	DisputeRaisedEvent	Disputed	Pauses 72h Timer
+SettlementPending	WalletSettledEvent	Settled	CRITICAL: Funds hit wallets
+Disputed	DisputeResolved_Release	SettlementPending	Resumes settlement path
+Disputed	DisputeResolved_Refund	Refunded	Platform initiates refund
+🌐 PHASE 3: ECOSYSTEM & ORCHESTRATION (Gaps 5, 6, & 7)
+Focus: Integrating the marketplace with the outside world.
+7. Fulfillment Orchestration (Gap 5)
+Create Nop.Plugin.Marketplace.Fulfillment. Define a strict abstraction layer for couriers.
+code
+C#
+public interface ICourierProvider
+{
+    string SystemName { get; }
+    Task<TrackingStatusResult> GetStatusAsync(string trackingNumber);
+    Task<LabelResult> GenerateLabelAsync(DropshipFulfillment ticket);
+}
+Webhooks: Build a generic endpoint /api/webhooks/courier/{provider} that normalizes incoming courier states (Pathao, RedX, etc.) into the internal ShipmentDeliveredEvent.
+8. Search Platform (Gap 6)
+Do not query the SQL database for the wholesale catalog or storefronts.
+Implement OpenSearch / Elasticsearch.
+Create a denormalized ProductIndexModel.
+When SupplierProductListed or InventoryChanged fires, a background consumer updates the OpenSearch document.
+Search API handles Faceting (Price, Category, Minimum Order Quantity).
+9. API Platform (Gap 7)
+Build Nop.Plugin.Marketplace.Api.
+Authentication: JWT issued against the MarketplaceBusiness entity.
+Endpoints Required for MVP:
+POST /api/v1/inventory/sync (For supplier ERPs to push stock).
+GET /api/v1/orders/pending (For supplier warehouse software).
+POST /api/v1/orders/{id}/ship (For supplier to post tracking numbers).
+🚀 ENTERPRISE IMPLEMENTATION ROADMAP (14 Weeks)
+Sprint 1-3: Core Commerce & Inventory (Weeks 1-6)
+Goal: Ensure a customer can buy a product, inventory safely decrements, and the order splits properly.
+Tasks: Build Marketplace.Inventory (Concurrency, TTLs) and Marketplace.Order (OrderGroup, Allocations). Implement IOrderAllocationService.
+Milestone: Multi-vendor checkout works without race conditions.
+Sprint 4-5: The Financial Engines (Weeks 7-10)
+Goal: Connect the existing data schemas to behavioral logic.
+Tasks: Implement EscrowStateMachine matrix. Build the Commission Rule Evaluator. Wire the Two-Phase Commit (IWalletSettlementService).
+Milestone: An order can go from Placed -> Delivered -> Settled, and GL accounts automatically balance.
+Sprint 6: Fulfillment & Ecosystem (Weeks 11-12)
+Goal: Courier tracking and automated state progression.
+Tasks: Build ICourierProvider. Create Webhook receivers. Map Courier "Delivered" to EscrowStateMachine.Delivered.
+Milestone: Zero-touch settlement (Courier updates tracking -> triggers 72h hold -> triggers settlement).
+Sprint 7: Scale & Headless (Weeks 13-14)
+Goal: Performance and integration.
+Tasks: Stand up OpenSearch. Build the Event-to-Index sync consumers. Build the JWT API Gateway for Suppliers.
+Milestone: Enterprise-ready architecture capable of handling 100k+ SKUs and ERP integrations.
+Final Architectural Verdict
+You have successfully designed a system that prevents the three deadliest marketplace sins:
+Money Creation/Loss (Solved via Double-Entry GL & Idempotency).
+Race Condition Settlements (Solved via Serializable TX scopes).
+Stuck Funds (Solved via Escrow FSM and Outbox pattern).
+If you execute this implementation plan exactly as laid out, prioritizing the Inventory Lock and App Services Layer first, you will have a robust, scalable, Tier-1 enterprise marketplace platform.

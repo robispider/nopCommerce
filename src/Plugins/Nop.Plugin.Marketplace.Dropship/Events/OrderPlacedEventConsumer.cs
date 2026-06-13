@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Nop.Core.Domain.Orders;
-using Nop.Data; // Required for IRepository
-using Nop.Plugin.Marketplace.Core.Domains; // Required for ResellerProductMapping & ProcurementSettlementPolicy
+using Nop.Data;
+using Nop.Plugin.Marketplace.Core.Domains;
 using Nop.Plugin.Marketplace.Dropship.Domains;
 using Nop.Plugin.Marketplace.Dropship.Services;
+using Nop.Plugin.Marketplace.Order.Domains; // <-- Access to Allocations
+using Nop.Plugin.Marketplace.Order.Domains.Enums; // <-- Access to FulfillmentMethod
+using Nop.Plugin.Marketplace.Order.Events; // <-- Access to the Event
 using Nop.Plugin.Marketplace.Wholesale.Services;
 using Nop.Services.Catalog;
 using Nop.Services.Events;
@@ -14,24 +16,27 @@ using Nop.Services.Orders;
 namespace Nop.Plugin.Marketplace.Dropship.Events
 {
     /// <summary>
-    /// Listens for native B2C checkouts and splits dropship items into Supplier tickets.
-    /// Evaluates Reseller Procurement Policies before sending to Supplier.
+    /// Listens for the Order Split completion from the Marketplace.Order plugin.
+    /// It grabs any allocations marked for "Dropship" and generates Supplier tickets.
     /// </summary>
-    public class OrderPlacedEventConsumer : IConsumer<OrderPlacedEvent>
+    public class OrderSplitCompletedEventConsumer : IConsumer<OrderSplitCompletedEvent>
     {
+        private readonly IRepository<MarketplaceOrderAllocation> _allocationRepository;
         private readonly IOrderService _orderService;
         private readonly IProductService _productService;
         private readonly ISupplierProductService _supplierProductService;
         private readonly IDropshipFulfillmentService _dropshipFulfillmentService;
         private readonly IRepository<ResellerProductMapping> _mappingRepository;
 
-        public OrderPlacedEventConsumer(
+        public OrderSplitCompletedEventConsumer(
+            IRepository<MarketplaceOrderAllocation> allocationRepository, // Inject new repository
             IOrderService orderService,
             IProductService productService,
             ISupplierProductService supplierProductService,
             IDropshipFulfillmentService dropshipFulfillmentService,
             IRepository<ResellerProductMapping> mappingRepository)
         {
+            _allocationRepository = allocationRepository;
             _orderService = orderService;
             _productService = productService;
             _supplierProductService = supplierProductService;
@@ -39,58 +44,58 @@ namespace Nop.Plugin.Marketplace.Dropship.Events
             _mappingRepository = mappingRepository;
         }
 
-        public async Task HandleEventAsync(OrderPlacedEvent eventMessage)
+        // FIXED SIGNATURE: Now correctly matches the event type
+        public async Task HandleEventAsync(OrderSplitCompletedEvent eventMessage)
         {
-            var order = eventMessage.Order;
+            // 1. Fetch only the allocations for this order that were routed to Dropship
+            var dropshipAllocations = await _allocationRepository.GetAllAsync(query =>
+                query.Where(a =>
+                    a.MarketplaceOrderGroupId == eventMessage.MarketplaceOrderGroupId &&
+                    a.FulfillmentMethodId == (int)FulfillmentMethod.Dropship));
 
-            // 1. Get the items the consumer just bought
-            var orderItems = await _orderService.GetOrderItemsAsync(order.Id);
-
-            foreach (var item in orderItems)
+            foreach (var allocation in dropshipAllocations)
             {
+                // We still need the native order item to get the quantity and product mapping
+                var item = await _orderService.GetOrderItemByIdAsync(allocation.OrderItemId);
+                if (item == null)
+                    continue;
+
                 var product = await _productService.GetProductByIdAsync(item.ProductId);
                 if (product == null)
                     continue;
 
-                var resellerVendorId = product.VendorId;
-
-                // 2. Determine if this product is a Dropship clone.
-                // Because we used "Light Cloning" in Phase 1, the ParentGroupedProductId 
-                // holds the original Supplier's Product ID. (Or alternatively, a mapped attribute).
                 int sourceProductId = product.ParentGroupedProductId > 0 ? product.ParentGroupedProductId : product.Id;
-
                 var supplierB2BSettings = await _supplierProductService.GetByProductIdAsync(sourceProductId);
 
-                // 3. If it's a valid dropship product, generate the Ticket!
-                if (supplierB2BSettings != null && supplierB2BSettings.IsDropshipEnabled && resellerVendorId != supplierB2BSettings.VendorId)
+                if (supplierB2BSettings != null)
                 {
                     // Find the Reseller Mapping to see what Procurement Policy they agreed to when importing
-                    var resellerMapping = _mappingRepository.Table
-                        .FirstOrDefault(m => m.ResellerCoreProductId == product.Id);
+                    var resellerMapping = await _mappingRepository.GetAllAsync(query =>
+                        query.Where(m => m.ResellerCoreProductId == product.Id));
+                    var mapping = resellerMapping.FirstOrDefault();
 
-                    int policyId = resellerMapping?.SelectedProcurementPolicyId ?? (int)ProcurementSettlementPolicy.FullEscrow;
-                    int initialStatus = (int)DropshipStatus.Pending; // Default
+                    int policyId = mapping?.SelectedProcurementPolicyId ?? (int)ProcurementSettlementPolicy.FullEscrow;
+                    int initialStatus = (int)DropshipStatus.Pending;
 
                     // THE PROCUREMENT GATEWAY
                     if (policyId == (int)ProcurementSettlementPolicy.ResellerPrepay)
                     {
-                        // The reseller must fund this out of pocket before the supplier acts!
                         initialStatus = (int)DropshipStatus.AwaitingResellerDeposit;
                     }
 
                     var fulfillment = new DropshipFulfillment
                     {
-                        OrderId = order.Id,
+                        OrderId = eventMessage.NativeOrderId,
                         OrderItemId = item.Id,
-                        ResellerVendorId = resellerVendorId,
+                        ResellerVendorId = product.VendorId,
                         SupplierVendorId = supplierB2BSettings.VendorId,
 
                         // Lock in the financials to protect the Reseller from sudden price changes!
                         LockedWholesalePrice = supplierB2BSettings.WholesalePrice * item.Quantity,
-                        LockedRetailPrice = item.PriceExclTax, // What the consumer paid natively
+                        LockedRetailPrice = item.PriceExclTax,
 
-                        DropshipStatusId = initialStatus,              // <--- Injected status
-                        ProcurementPolicyId = policyId,                // <--- Logging the policy
+                        DropshipStatusId = initialStatus,
+                        ProcurementPolicyId = policyId,
                         CreatedOnUtc = DateTime.UtcNow
                     };
 

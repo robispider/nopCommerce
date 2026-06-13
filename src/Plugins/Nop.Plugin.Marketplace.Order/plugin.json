@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Order & Allocation Engine",
+  "SystemName": "Marketplace.Order",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 7,
+  "FileName": "Nop.Plugin.Marketplace.Order.dll",
+  "Description": "Decomposes native B2C orders into immutable multi-vendor allocations."
+}

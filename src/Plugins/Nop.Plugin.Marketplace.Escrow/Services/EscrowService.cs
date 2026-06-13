@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Transactions;
@@ -7,6 +7,7 @@ using Nop.Data;
 using Nop.Plugin.Marketplace.Core.Domains;
 using Nop.Plugin.Marketplace.Core.Events;
 using Nop.Plugin.Marketplace.Escrow.Domains;
+using Nop.Plugin.Marketplace.Commission.Services;
 
 namespace Nop.Plugin.Marketplace.Escrow.Services
 {
@@ -15,13 +16,13 @@ namespace Nop.Plugin.Marketplace.Escrow.Services
         private readonly IRepository<EscrowTransaction> _escrowRepository;
         private readonly IRepository<OutboxMessage> _outboxRepository;
         private readonly IRepository<EscrowStateHistory> _historyRepository; // <-- Added
-        private readonly ICommissionService _commissionService;
+        private readonly ICommissionEvaluatorService _commissionService;
 
         public EscrowService(
             IRepository<EscrowTransaction> escrowRepository,
             IRepository<OutboxMessage> outboxRepository,
             IRepository<EscrowStateHistory> historyRepository, // <-- Added
-            ICommissionService commissionService)
+            ICommissionEvaluatorService commissionService)
         {
             _escrowRepository = escrowRepository;
             _outboxRepository = outboxRepository;
@@ -117,7 +118,7 @@ namespace Nop.Plugin.Marketplace.Escrow.Services
             if (escrow.CurrentStateId != (int)EscrowState.GracePeriod)
                 throw new Exception("Escrow is not in Grace Period.");
 
-            var splits = await _commissionService.CalculateSplitsAsync(escrow.CoreOrderId);
+            var splits = await _commissionService.GetExistingSplitsAsync(escrow.CoreOrderId);
 
             // AMAZON-GRADE: State is only "Pending Settlement", NOT Released yet.
             escrow.CurrentStateId = (int)EscrowState.SettlementPending;
