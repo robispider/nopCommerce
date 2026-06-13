@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Wholesale Ecosystem",
+  "SystemName": "Marketplace.Wholesale",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 4,
+  "FileName": "Nop.Plugin.Marketplace.Wholesale.dll",
+  "Description": "B2B Marketplace engine handling supplier catalogs, MOQ, and wholesale pricing."
+}

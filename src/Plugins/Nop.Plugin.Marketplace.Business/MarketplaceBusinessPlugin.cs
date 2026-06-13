@@ -133,9 +133,13 @@ namespace Nop.Plugin.Marketplace.Business
         // --- WIDGET INJECTION ---
         public bool HideInWidgetList => false;
 
+        // Inside MarketplaceBusinessPlugin.cs
         public Type GetWidgetViewComponent(string widgetZone)
         {
-            // Return our custom ViewComponent based on the injected zone
+            // FIX: Changed from HeaderNavbar to HeaderNavbarBefore
+            if (widgetZone == AdminWidgetZones.HeaderNavbarBefore)
+                return typeof(MarketplaceContextBadgeViewComponent);
+
             if (widgetZone == AdminWidgetZones.DashboardTop)
                 return typeof(MarketplaceAdminDashboardViewComponent);
 
@@ -145,10 +149,12 @@ namespace Nop.Plugin.Marketplace.Business
         public Task<IList<string>> GetWidgetZonesAsync()
         {
             return Task.FromResult<IList<string>>(new List<string>
-            {
-                AdminWidgetZones.DashboardTop,             // Injects into the Admin Dashboard
-                PublicWidgetZones.AccountNavigationAfter   // Injects into the Public "My Account" menu
-            });
+    {
+        // FIX: Changed from HeaderNavbar to HeaderNavbarBefore
+        AdminWidgetZones.HeaderNavbarBefore,
+        AdminWidgetZones.DashboardTop,
+        PublicWidgetZones.AccountNavigationAfter
+    });
         }
     }
 }

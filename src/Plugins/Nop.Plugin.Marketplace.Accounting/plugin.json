@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace.Accounting",
+  "SystemName": "Marketplace.Accounting",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 1,
+  "FileName": "Nop.Plugin.Marketplace.Accounting.dll",
+  "Description": "Handel accounting for market place"
+}

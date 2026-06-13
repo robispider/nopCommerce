@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Dropshipping Engine",
+  "SystemName": "Marketplace.Dropship",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 5,
+  "FileName": "Nop.Plugin.Marketplace.Dropship.dll",
+  "Description": "Handles mixed-cart order routing and automated supplier fulfillment requests."
+}

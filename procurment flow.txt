@@ -1,0 +1,47 @@
+Evaluating Models A-F in OUR Application Flow
+Now that we have established the ProcurementSettlementPolicy Enum, here is exactly how Models A through F will function inside our custom plugins.
+Models A & F: Full Escrow & Supplier Takes Risk
+Enum Mapping: ProcurementSettlementPolicy.FullEscrow (Value: 1)
+The Code Flow:
+Consumer buys product for ৳5000.
+OrderPlacedEventConsumer reads the policy as FullEscrow.
+DropshipFulfillment is created with Status Pending (10).
+Supplier sees it immediately in their B2B Dashboard. They ship it.
+Escrow locks Consumer's ৳5000.
+Upon delivery, Escrow releases. Ledger credits Supplier ৳3500 and Reseller ৳1500.
+Platform Risk: 0 (Consumer money pays Supplier).
+Verdict: Perfectly supported.
+Model B: Supplier Ships Only After Reseller Deposit
+Enum Mapping: ProcurementSettlementPolicy.ResellerPrepay (Value: 2)
+The Code Flow:
+Consumer buys product for ৳5000.
+OrderPlacedEventConsumer intercepts it.
+DropshipFulfillment is created with Status AwaitingResellerDeposit (15).
+Crucial: Supplier does not see a "Ship" button. Supplier sees nothing.
+Reseller gets an alert: "Procurement Action Required".
+Reseller deposits ৳3500 via Payment Gateway. Ledger logs Credit: Reseller Wallet.
+Ledger instantly logs Debit: Reseller Wallet -> Credit: Escrow Holding.
+Ticket Status changes to Pending (10). Supplier ships.
+Upon delivery, Supplier is paid from the Reseller's ৳3500 deposit. Customer's ৳5000 is then split.
+Platform Risk: 0.
+Verdict: Perfectly supported.
+Models C & D: Security Deposit & Rolling Reserve
+Enum Mapping: ProcurementSettlementPolicy.RollingReserve (Value: 4)
+The Code Flow:
+Consumer buys product. Wholesale cost is ৳3500.
+OrderPlacedEventConsumer intercepts it.
+System checks WalletLedger for Reseller's ReserveBalance.
+Condition A (Balance > ৳3500): System instantly locks ৳3500 of the reserve. Ticket goes to Pending (10). Supplier ships immediately.
+Condition B (Balance < ৳3500): Ticket goes to AwaitingResellerDeposit (15). Reseller must top up their reserve to unlock the order.
+Platform Risk: 0. (Always backed by actual cash in the ledger).
+Verdict: The most scalable model. We will implement the "Reserve Ledger Check" in the upcoming Wallet plugin.
+Model E: Credit-Limited Procurement
+Enum Mapping: ProcurementSettlementPolicy.CreditLimit (Value: 8)
+The Code Flow:
+Admin assigns a "Trust Limit" of ৳50,000 to a premium Reseller profile.
+Consumer buys product. Wholesale cost is ৳3500.
+OrderPlacedEventConsumer queries SELECT SUM(LockedWholesalePrice) WHERE DropshipStatus IN (Pending, Shipped) AND ResellerId = X.
+If total exposure + ৳3500 < ৳50,000, Ticket becomes Pending (10).
+If limit exceeded, Ticket becomes AwaitingResellerDeposit (15).
+Platform Risk: Medium (Platform essentially loans the trust).
+Verdict: Fully supported by the framework we just built, activated simply by adding a CreditLimit column to MarketplaceBusiness.

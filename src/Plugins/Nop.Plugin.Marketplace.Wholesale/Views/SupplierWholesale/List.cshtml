@@ -1,0 +1,62 @@
+<!-- Views/SupplierWholesale/List.cshtml -->
+@model Nop.Plugin.Marketplace.Wholesale.Models.SupplierProductSearchModel
+@{
+    Layout = "_AdminLayout";
+    NopHtml.SetActiveMenuItemSystemName("Marketplace.WholesaleCatalog");
+    NopHtml.AddTitleParts("Wholesale Catalog");
+}
+
+<div class="content-header clearfix">
+    <h1 class="float-left">
+        Wholesale Catalog (B2B Settings)
+    </h1>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="cards-group">
+            <div class="card card-default">
+                <div class="card-body">
+                    @await Html.PartialAsync("Table", new DataTablesModel
+                    {
+                        Name = "supplier-products-grid",
+                        UrlRead = new DataUrl("List", "SupplierWholesale", null),
+                        Length = Model.PageSize,
+                        LengthMenu = Model.AvailablePageSizes,
+                        ColumnCollection = new List<ColumnProperty>
+                        {
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.SupplierProductModel.ProductName))
+                            {
+                                Title = "Product Name",
+                                Width = "300"
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.SupplierProductModel.WholesalePrice))
+                            {
+                                Title = "Wholesale Price",
+                                Width = "150"
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.SupplierProductModel.MinimumOrderQuantity))
+                            {
+                                Title = "MOQ",
+                                Width = "100"
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.SupplierProductModel.IsDropshipEnabled))
+                            {
+                                Title = "Dropship",
+                                Width = "100",
+                                Render = new RenderBoolean()
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.SupplierProductModel.Id))
+                            {
+                                Title = "Edit",
+                                Width = "100",
+                                ClassName = NopColumnClassDefaults.Button,
+                                Render = new RenderButtonEdit(new DataUrl("Edit", "SupplierWholesale"))
+                            }
+                        }
+                    })
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

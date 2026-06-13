@@ -1,0 +1,177 @@
+@model Nop.Plugin.Marketplace.Wholesale.Models.B2BProductSearchModel
+@{
+    Layout = "_AdminLayout";
+    NopHtml.SetActiveMenuItemSystemName("Marketplace.B2BSourcing");
+    NopHtml.AddTitleParts("B2B Sourcing Portal");
+}
+@Html.AntiForgeryToken()
+<div class="content-header clearfix">
+    <h1 class="float-left">
+        B2B Sourcing Portal
+        <small>Browse supplier products to import into your storefront</small>
+    </h1>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="cards-group">
+            <div class="card card-default">
+                <div class="card-body">
+                    
+                    @await Html.PartialAsync("Table", new DataTablesModel
+                    {
+                        Name = "b2b-sourcing-grid",
+                        UrlRead = new DataUrl("List", "B2BSourcing", null),
+                        Length = Model.PageSize,
+                        LengthMenu = Model.AvailablePageSizes,
+                        ColumnCollection = new List<ColumnProperty>
+                        {
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.B2BProductModel.PictureThumbnailUrl))
+                            {
+                                Title = "Image",
+                                Width = "100",
+                                Render = new RenderPicture()
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.B2BProductModel.ProductName))
+                            {
+                                Title = "Product Name",
+                                Width = "250"
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.B2BProductModel.SupplierName))
+                            {
+                                Title = "Supplier Name",
+                                Width = "150"
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.B2BProductModel.WholesalePrice))
+                            {
+                                Title = "Wholesale Cost",
+                                Width = "150"
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.B2BProductModel.MinimumOrderQuantity))
+                            {
+                                Title = "MOQ",
+                                Width = "100"
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.B2BProductModel.BadgesHtml))
+                            {
+                                Title = "Availability",
+                                Width = "150",
+                                Encode = false // Renders the HTML Badges
+                            },
+                            new ColumnProperty(nameof(Nop.Plugin.Marketplace.Wholesale.Models.B2BProductModel.ProductId))
+                            {
+                                Title = "Action",
+                                Width = "100",
+                                ClassName = NopColumnClassDefaults.Button,
+                                Render = new RenderCustom("renderImportButton")
+                            }
+                        }
+                    })
+
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Custom JS for the Import Button Action -->
+<script>
+    function renderImportButton(data, type, row, meta) {
+        return `<button type="button" class="btn btn-sm btn-primary" onclick="openImportModal(${data}, '${row.ProductName.replace(/'/g, "\\'")}')">
+                    <i class="fas fa-plus-circle"></i> Add to Store
+                </button>`;
+    }
+
+    function openImportModal(productId, productName) {
+        // Populate modal data
+        $('#importProductId').val(productId);
+        $('#importProductName').text("Product: " + productName);
+        
+        // Show the beautiful modal
+        $('#eliteImportModal').modal('show');
+    }
+
+    function executeEliteImport() {
+        let productId = $('#importProductId').val();
+        let margin = parseFloat($('#importMargin').val());
+        let policyId = parseInt($('#importPolicy').val());
+        
+        if (isNaN(margin) || margin < 0) {
+            alert("Please enter a valid positive margin.");
+            return;
+        }
+
+        // Lock button to prevent double submission
+        let $btn = $('#eliteImportModal .btn-primary');
+        $btn.html('<i class="fas fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
+
+        $.ajax({
+            cache: false,
+            type: "POST",
+            url: "@(Url.Action("ImportSupplierProduct", "MarketplaceCatalog", new { Area = "Admin" }))",
+            data: {
+                supplierProductId: productId,
+                retailMarginPercentage: margin,
+                procurementPolicyId: policyId // Pass this to your backend service!
+            },
+            headers: {
+                "RequestVerificationToken": $('input[name="__RequestVerificationToken"]').val()
+            },
+            success: function (data) {
+                if (data.success) {
+                    $('#eliteImportModal').modal('hide');
+                    // Use a toastr notification instead of alert for elite feel
+                    alert("Product successfully imported to your Sourced Catalog!"); 
+                    updateTable('#b2b-sourcing-grid');
+                } else {
+                    alert("Error: " + data.message);
+                }
+            },
+            complete: function() {
+                $btn.html('<i class="fas fa-check"></i> Confirm Import').prop('disabled', false);
+            }
+        });
+    }
+</script>
+
+                        <!-- Elite Import Modal -->
+<div class="modal fade" id="eliteImportModal" tabindex="-1" role="dialog" aria-labelledby="eliteImportModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="eliteImportModalLabel"><i class="fas fa-download"></i> Import to My Storefront</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="importProductId" />
+                <h6 id="importProductName" class="font-weight-bold mb-3"></h6>
+                
+                <div class="form-group">
+                    <label>Desired Retail Margin (%)</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" id="importMargin" value="20" min="0" step="1">
+                        <div class="input-group-append">
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </div>
+                    <small class="form-text text-muted">We will automatically calculate your B2C retail price based on the locked wholesale cost.</small>
+                </div>
+
+                <div class="form-group">
+                    <label>Select Procurement Agreement</label>
+                    <select class="form-control" id="importPolicy">
+                        <option value="2">Reseller Prepay (I will deposit funds when an order arrives)</option>
+                        <option value="4">Rolling Reserve (Deduct from my active wallet reserve)</option>
+                        <option value="1">Full Escrow (Supplier finances the wait - Subject to supplier approval)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="executeEliteImport()"><i class="fas fa-check"></i> Confirm Import</button>
+            </div>
+        </div>
+    </div>
+</div>

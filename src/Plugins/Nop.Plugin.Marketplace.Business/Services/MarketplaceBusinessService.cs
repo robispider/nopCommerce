@@ -64,19 +64,22 @@ namespace Nop.Plugin.Marketplace.Business.Services
             business.UpdatedOnUtc = DateTime.UtcNow;
             await _businessRepository.UpdateAsync(business);
 
-            // Fetch the nopCommerce customer mapped to this vendor
             var customer = (await _customerService.GetAllCustomersAsync(vendorId: business.VendorId)).FirstOrDefault();
             if (customer != null)
             {
-                // Assign Supplier Role (Assuming they applied for Supplier, can be dynamic based on Business.RoleTypeId)
+                // 1. Resolve Native Roles
                 var supplierRole = await _customerService.GetCustomerRoleBySystemNameAsync("MarketplaceSupplier");
-                if (supplierRole != null)
+                var resellerRole = await _customerService.GetCustomerRoleBySystemNameAsync("MarketplaceReseller");
+
+                // 2. Map dynamically based on KYC selection
+                if (business.RoleTypeId == (int)MarketplaceRoleType.Supplier || business.RoleTypeId == (int)MarketplaceRoleType.Both)
                 {
-                    await _customerService.AddCustomerRoleMappingAsync(new CustomerCustomerRoleMapping
-                    {
-                        CustomerId = customer.Id,
-                        CustomerRoleId = supplierRole.Id
-                    });
+                    await _customerService.AddCustomerRoleMappingAsync(new CustomerCustomerRoleMapping { CustomerId = customer.Id, CustomerRoleId = supplierRole.Id });
+                }
+
+                if (business.RoleTypeId == (int)MarketplaceRoleType.Reseller || business.RoleTypeId == (int)MarketplaceRoleType.Both)
+                {
+                    await _customerService.AddCustomerRoleMappingAsync(new CustomerCustomerRoleMapping { CustomerId = customer.Id, CustomerRoleId = resellerRole.Id });
                 }
             }
         }

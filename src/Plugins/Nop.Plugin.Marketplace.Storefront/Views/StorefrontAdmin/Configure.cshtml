@@ -1,12 +1,15 @@
 @model Nop.Plugin.Marketplace.Storefront.Models.StorefrontConfigurationModel
 
 @{
-    // Notice we use the standard AdminLayout, not ConfigurePlugin!
     Layout = "_AdminLayout";
     ViewBag.PageTitle = "Manage My Storefront";
 }
 
 <form asp-controller="StorefrontAdmin" asp-action="Configure" method="post">
+    
+    <!-- THIS IS THE FIX: Generates the hidden security token -->
+     @Html.AntiForgeryToken()
+
     <div class="content-header clearfix">
         <h1 class="float-left">
             Manage My Storefront

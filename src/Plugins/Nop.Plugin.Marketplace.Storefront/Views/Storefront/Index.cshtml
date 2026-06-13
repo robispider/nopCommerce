@@ -1,11 +1,12 @@
 @model Nop.Plugin.Marketplace.Storefront.Models.StorefrontIndexModel
 @using Nop.Web.Framework.UI
+@inject INopHtmlHelper NopHtml
 
 @{
     Layout = "_ColumnsOne";
     
-    // Set the SEO Page Title dynamically to the Reseller's Store Name
-    Html.AddTitleParts(Model.StoreName);
+    // Now the view knows exactly what NopHtml is!
+    NopHtml.AddTitleParts(Model.StoreName);
 }
 
 <div class="page custom-storefront-page">
@@ -31,10 +32,6 @@
                     @foreach (var product in Model.Products)
                     {
                         <div class="item-box">
-                            @* 
-                                We reuse the native nopCommerce product box! 
-                                This ensures Add-To-Cart, Wishlist, and Compare buttons work instantly.
-                            *@
                             @await Html.PartialAsync("_ProductBox", product)
                         </div>
                     }

@@ -1,0 +1,64 @@
+@model Nop.Plugin.Marketplace.Escrow.Models.EscrowDisputeSearchModel
+@using Nop.Web.Framework.Models.DataTables
+@inject INopHtmlHelper NopHtml
+@{
+    Layout = "_AdminLayout";
+    NopHtml.SetActiveMenuItemSystemName("Marketplace.EscrowDisputes");
+    NopHtml.AddTitleParts("Escrow Disputes");
+}
+
+@Html.AntiForgeryToken()
+
+<div class="content-header clearfix">
+    <h1 class="float-left">
+        Escrow Disputes
+        <small>Resolve paused transactions</small>
+    </h1>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card card-default">
+            <div class="card-body">
+                @await Html.PartialAsync("Table", new DataTablesModel
+                {
+                    Name = "disputes-grid",
+                    UrlRead = new DataUrl("DisputedListData", "EscrowAdmin", null),
+                    Length = Model.PageSize,
+                    LengthMenu = Model.AvailablePageSizes,
+                    ColumnCollection = new List<ColumnProperty>
+                    {
+                        new ColumnProperty(nameof(EscrowDisputeModel.OrderNumber)) { Title = "Order", Width = "100" },
+                        new ColumnProperty(nameof(EscrowDisputeModel.SupplierName)) { Title = "Supplier", Width = "150" },
+                        new ColumnProperty(nameof(EscrowDisputeModel.ResellerName)) { Title = "Reseller", Width = "150" },
+                        new ColumnProperty(nameof(EscrowDisputeModel.DateDisputed)) { Title = "Disputed On", Width = "150" },
+                        new ColumnProperty(nameof(EscrowDisputeModel.Id))
+                        {
+                            Title = "Actions",
+                            Width = "150",
+                            ClassName = NopColumnClassDefaults.Button,
+                            Render = new RenderCustom("renderActionButtons")
+                        }
+                    }
+                })
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    function renderActionButtons(data, type, row, meta) {
+        return `
+            <form action="@Url.Action("ForceRelease", "EscrowAdmin")" method="post" style="display:inline;">
+                <input type="hidden" name="escrowId" value="${data}" />
+                <input type="hidden" name="__RequestVerificationToken" value="$('input[name=__RequestVerificationToken]').val()" />
+                <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('Force release funds to vendors?');">
+                    <i class="fas fa-check"></i> Force Release
+                </button>
+            </form>
+            <a href="/Admin/Order/Edit/${row.OrderNumber.replace('Order #', '')}" class="btn btn-sm btn-danger">
+                <i class="fas fa-undo"></i> Go to Refund
+            </a>
+        `;
+    }
+</script>

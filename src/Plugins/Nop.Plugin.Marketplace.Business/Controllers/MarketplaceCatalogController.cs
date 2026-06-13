@@ -1,11 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Nop.Plugin.Marketplace.Business.Services;
+using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
 
 namespace Nop.Plugin.Marketplace.Business.Controllers
 {
     [AuthorizeAdmin] // Require admin/vendor access
+    [Area(AreaNames.ADMIN)]
     [AutoValidateAntiforgeryToken]
     public class MarketplaceCatalogController : BasePluginController
     {

@@ -1,0 +1,121 @@
+<!-- Views/SupplierWholesale/Edit.cshtml -->
+@model Nop.Plugin.Marketplace.Wholesale.Models.SupplierProductModel
+@{
+    Layout = "_AdminLayout";
+    NopHtml.SetActiveMenuItemSystemName("Marketplace.WholesaleCatalog");
+    NopHtml.AddTitleParts("Edit B2B Settings - " + Model.ProductName);
+}
+
+<form asp-controller="SupplierWholesale" asp-action="Edit" method="post">
+    @Html.AntiForgeryToken()
+    <input type="hidden" asp-for="ProductId" />
+
+    <div class="content-header clearfix">
+        <h1 class="float-left">
+            Edit B2B Settings - @Model.ProductName
+            <small>
+                <i class="fas fa-arrow-circle-left"></i>
+                <a asp-action="List">back to wholesale catalog</a>
+            </small>
+        </h1>
+        <div class="float-right">
+            <button type="submit" name="save" class="btn btn-primary">
+                <i class="far fa-save"></i> Save
+            </button>
+        </div>
+    </div>
+
+    <section class="content">
+        <div class="container-fluid">
+            <div class="cards-group">
+                <div class="card card-default">
+                    <div class="card-body">
+                        
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="WholesalePrice" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="WholesalePrice" />
+                                <span asp-validation-for="WholesalePrice"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="MinimumOrderQuantity" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="MinimumOrderQuantity" />
+                                <span asp-validation-for="MinimumOrderQuantity"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="IsDropshipEnabled" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="IsDropshipEnabled" />
+                                <span asp-validation-for="IsDropshipEnabled"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="IsPreorderEnabled" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="IsPreorderEnabled" />
+                                <span asp-validation-for="IsPreorderEnabled"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group row">
+                            <div class="col-md-3">
+                                <nop-label asp-for="LeadTimeDays" />
+                            </div>
+                            <div class="col-md-9">
+                                <nop-editor asp-for="LeadTimeDays" />
+                                <span asp-validation-for="LeadTimeDays"></span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            <div class="card card-default">
+    <div class="card-header">
+        <i class="fas fa-shield-alt"></i> Financial Risk & Procurement (Model G)
+    </div>
+    <div class="card-body">
+        <div class="callout callout-warning">
+            <h5>Set your Risk Tolerance</h5>
+            <p>Select how you are willing to be paid. Resellers will only be able to import this product if they agree to one of these terms.</p>
+        </div>
+
+        <div class="form-group row">
+            <div class="col-md-3">
+                <div class="label-wrapper"><label class="col-form-label">Allow Reseller Prepay</label></div>
+            </div>
+            <div class="col-md-9">
+                <!-- In a real implementation, you will bind these to boolean flags derived from the bitwise AllowedProcurementPolicies integer -->
+                <input type="checkbox" class="form-check-input" checked="checked" style="margin-left:0;" />
+                <span class="text-muted ml-4">Reseller must deposit funds to the platform before you ship. (Zero risk for you).</span>
+            </div>
+        </div>
+
+        <div class="form-group row">
+            <div class="col-md-3">
+                <div class="label-wrapper"><label class="col-form-label">Allow Full Escrow</label></div>
+            </div>
+            <div class="col-md-9">
+                <input type="checkbox" class="form-check-input" style="margin-left:0;" />
+                <span class="text-muted ml-4">You ship first. You get paid when the consumer receives the item. (You finance the transaction).</span>
+            </div>
+        </div>
+    </div>
+</div>
+        </div>
+    </section>
+</form>

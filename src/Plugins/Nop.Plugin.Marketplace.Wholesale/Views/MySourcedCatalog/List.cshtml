@@ -1,0 +1,68 @@
+@using Nop.Plugin.Marketplace.Wholesale.Models
+@model Nop.Plugin.Marketplace.Wholesale.Models.SourcedProductSearchModel
+@{
+    Layout = "_AdminLayout";
+    NopHtml.SetActiveMenuItemSystemName("Marketplace.MySourcedCatalog");
+    NopHtml.AddTitleParts("My Sourced Catalog");
+}
+
+@Html.AntiForgeryToken()
+
+<div class="content-header clearfix">
+    <h1 class="float-left">
+        My Sourced Catalog
+        <small>Products imported from B2B Suppliers</small>
+    </h1>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card card-default">
+            <div class="card-body">
+                <div class="callout callout-info">
+                    <h5><i class="fas fa-info-circle"></i> Procurement Clarity</h5>
+                    <p>This grid shows products you have imported from suppliers. Native products you uploaded yourself will not appear here. Pay attention to the <b>Procurement Policy</b> to know how orders for these items will be funded.</p>
+                </div>
+                
+                @await Html.PartialAsync("Table", new DataTablesModel
+                {
+                    Name = "sourced-products-grid",
+                    UrlRead = new DataUrl("List", "MySourcedCatalog", null),
+                    Length = Model.PageSize,
+                    LengthMenu = Model.AvailablePageSizes,
+                    ColumnCollection = new List<ColumnProperty>
+                    {
+                        new ColumnProperty(nameof(SourcedProductModel.PictureThumbnailUrl))
+                        {
+                            Title = "Image", Width = "100", Render = new RenderPicture()
+                        },
+                        new ColumnProperty(nameof(SourcedProductModel.RetailProductName))
+                        {
+                            Title = "Your Retail Product", Width = "250"
+                        },
+                        new ColumnProperty(nameof(SourcedProductModel.SupplierName))
+                        {
+                            Title = "Supplier", Width = "150"
+                        },
+                        new ColumnProperty(nameof(SourcedProductModel.WholesaleCost))
+                        {
+                            Title = "Locked Wholesale", Width = "100"
+                        },
+                        new ColumnProperty(nameof(SourcedProductModel.RetailPrice))
+                        {
+                            Title = "Retail Price", Width = "100"
+                        },
+                        new ColumnProperty(nameof(SourcedProductModel.MarginHtml))
+                        {
+                            Title = "Margin", Width = "80", Encode = false
+                        },
+                        new ColumnProperty(nameof(SourcedProductModel.ProcurementPolicyHtml))
+                        {
+                            Title = "Procurement Policy", Width = "150", Encode = false
+                        }
+                    }
+                })
+            </div>
+        </div>
+    </div>
+</section>

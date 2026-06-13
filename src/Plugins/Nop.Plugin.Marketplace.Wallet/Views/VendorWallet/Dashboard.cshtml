@@ -1,0 +1,108 @@
+@model Nop.Plugin.Marketplace.Wallet.Models.WalletDashboardModel
+@using Nop.Web.Framework.Models.DataTables
+@inject INopHtmlHelper NopHtml
+@{
+    Layout = "_AdminLayout";
+    NopHtml.SetActiveMenuItemSystemName("Marketplace.Wallet");
+    NopHtml.AddTitleParts("My Wallet");
+}
+
+@Html.AntiForgeryToken()
+
+<div class="content-header clearfix">
+    <h1 class="float-left">
+        My Wallet
+        <small>Manage your earnings and payouts</small>
+    </h1>
+    <div class="float-right">
+        <!-- Payout Request Modal Trigger -->
+        <button type="button" class="btn btn-success" data-toggle="modal" data-target="#requestPayoutModal">
+            <i class="fas fa-money-bill-wave"></i> Request Payout
+        </button>
+    </div>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <!-- Balance Cards -->
+        <div class="row">
+            <div class="col-lg-4 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>@Model.AvailableBalance.ToString("C")</h3>
+                        <p>Available for Payout</p>
+                    </div>
+                    <div class="icon"><i class="fas fa-check-circle"></i></div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>@Model.PendingBalance.ToString("C")</h3>
+                        <p>Pending Withdrawals</p>
+                    </div>
+                    <div class="icon"><i class="fas fa-hourglass-half"></i></div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>@Model.ReserveBalance.ToString("C")</h3>
+                        <p>Rolling Reserve</p>
+                    </div>
+                    <div class="icon"><i class="fas fa-lock"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ledger Grid -->
+        <div class="card card-default">
+            <div class="card-header"><h3 class="card-title"><i class="fas fa-book"></i> Ledger History</h3></div>
+            <div class="card-body">
+                @await Html.PartialAsync("Table", new DataTablesModel
+                {
+                    Name = "ledger-grid",
+                    UrlRead = new DataUrl("LedgerList", "VendorWallet", null),
+                    Length = Model.LedgerSearchModel.PageSize,
+                    LengthMenu = Model.LedgerSearchModel.AvailablePageSizes,
+                    ColumnCollection = new List<ColumnProperty>
+                    {
+                        new ColumnProperty(nameof(WalletLedgerModel.Date)) { Title = "Date", Width = "150" },
+                        new ColumnProperty(nameof(WalletLedgerModel.EntryType)) { Title = "Type", Width = "100", Encode = false },
+                        new ColumnProperty(nameof(WalletLedgerModel.Amount)) { Title = "Amount", Width = "100" },
+                        new ColumnProperty(nameof(WalletLedgerModel.Reference)) { Title = "Reference", Width = "200" }
+                    }
+                })
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Request Payout Modal -->
+<div class="modal fade" id="requestPayoutModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <form asp-controller="VendorWallet" asp-action="RequestWithdrawal" method="post">
+            @Html.AntiForgeryToken()
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Request Payout</h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Amount to Withdraw</label>
+                        <div class="input-group">
+                            <div class="input-group-prepend"><span class="input-group-text">$</span></div>
+                            <input type="number" name="amount" class="form-control" max="@Model.AvailableBalance" step="0.01" required />
+                        </div>
+                        <small class="text-muted">Maximum available: @Model.AvailableBalance.ToString("C")</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Submit Request</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

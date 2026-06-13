@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Escrow",
+  "SystemName": "Marketplace.Escrow",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 5,
+  "FileName": "Nop.Plugin.Marketplace.Escrow.dll",
+  "Description": "Handles Escrow"
+}

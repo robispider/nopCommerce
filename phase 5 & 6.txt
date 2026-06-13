@@ -1,0 +1,94 @@
+🏦 UPGRADED PLAN: Phase 5 & 6 (Fintech Escrow & Ledger Logic)
+Core Philosophy Shift
+nopCommerce Order = The Sales Record (Receipt).
+EscrowTransaction = The Workflow State Machine.
+WalletLedger = The absolute Legal Source of Truth for money.
+1. The Financial Data Model (Ledger-First Architecture)
+We will abandon the idea of storing "balances" as plain numbers. Balances will be projections (sums) of ledger entries.
+A. Wallet Account & Ledger
+WalletAccount (Cached Projection Table)
+Id, VendorId
+AvailableBalance (Money they can withdraw right now)
+PendingBalance (Money tied up in processing withdrawals)
+ReserveBalance (Money held for chargeback protection)
+RowVersion (Optimistic concurrency token)
+WalletLedger (The Absolute Source of Truth)
+Every single movement of money gets a permanent, immutable row here.
+Id (PK)
+WalletAccountId
+EntryType (Credit / Debit)
+Amount (Strictly DECIMAL(18,4))
+ReferenceType (e.g., "EscrowRelease", "Withdrawal", "Refund", "ManualAdjustment")
+ReferenceId (e.g., The EscrowId or WithdrawalId)
+IdempotencyKey (CRITICAL: Prevents double-crediting if server crashes mid-request)
+CreatedOnUtc
+B. The Gateway Fee Model (The Math)
+The platform must account for gateway fees (Stripe/SSLCommerz/bKash). The Platform will absorb the gateway fee out of its own commission to keep vendor math simple.
+Example Transaction:
+Gross Sale: ৳5,000
+Gateway Fee (1.5%): ৳75
+Net Platform Receipt: ৳4,925
+Supplier Share: ৳3,500
+Reseller Share: ৳1,250
+Platform Commission: ৳250 (Gross)
+Platform Actual Revenue: ৳175 (Net after Gateway Fee)
+2. The Enhanced Escrow State Machine
+Escrow purely controls when the Ledger is allowed to move money. It does not hold the money itself.
+A. The Expanded States
+CREATED (Cart split, waiting for payment confirmation)
+FUNDED (Payment cleared, locked in system)
+PROCESSING (Supplier acknowledges and is sourcing/packing)
+SHIPPED (Supplier uploaded tracking)
+DELIVERED (Courier webhook confirms delivery)
+GRACE_PERIOD (3-day countdown begins for customer disputes)
+RELEASED (Terminal state: Triggers Ledger Credits)
+DISPUTED (Customer raises issue. Timer paused. Requires Admin resolution)
+REFUNDED (Terminal state: Customer gets money back)
+CANCELLED (Terminal state: Supplier didn't ship in time)
+B. The Audit Trail
+EscrowStateHistory
+Never overwrite a state without logging it.
+Id, EscrowTransactionId
+OldStateId, NewStateId
+ChangedBy (UserId or System)
+ChangedAtUtc
+Notes (e.g., "Courier Webhook confirmed via SSL")
+C. Concurrency Protection (The Race Condition Fix)
+To prevent a "Release Job" and "Customer Dispute" from executing at the exact same millisecond:
+All state updates will use Optimistic Concurrency via a RowVersion (or DB-level transaction locks).
+Logic: UPDATE Escrow SET State = 'DISPUTED' WHERE Id = 123 AND State = 'GRACE_PERIOD' AND RowVersion = @OldVersion
+If AffectedRows == 0, the transaction aborts. No double execution.
+3. The Commission Rules Engine
+Hardcoded percentages fail in the real world. We will create a CommissionRule table.
+Id, RuleName (e.g., "Default", "Electronics", "Gold Vendor")
+CategoryId (Nullable)
+VendorId (Nullable)
+PercentageFee
+FixedFee
+Priority (Highest priority rule applies first)
+Flow: When an Escrow reaches RELEASED, the Escrow Engine asks the ICommissionService -> "What is the split for this order?". The service evaluates the rules, calculates the numbers, and commands the WalletLedger to write the entries.
+4. Withdrawal & Refund State Machines
+Because API calls to banks and gateways fail frequently, we need state machines for money leaving the system.
+A. Withdrawal Workflow (Vendor paying out)
+When a Reseller asks for their ৳1,250:
+REQUESTED: Ledger writes a Debit to AvailableBalance and Credit to PendingBalance. (Money is locked, preventing double withdrawal).
+PROCESSING: Admin approves, system pings bank API.
+COMPLETED: Bank confirms. Ledger clears the PendingBalance.
+FAILED: Bank rejects. Ledger Debits Pending and Credits Available (money returned to vendor).
+B. Refund Workflow (Customer getting money back)
+When an Escrow is REFUNDED:
+REQUESTED: Ping payment gateway (SSLCommerz/bKash).
+PROCESSING: Waiting for gateway async confirmation.
+COMPLETED: Gateway confirms. Escrow closed.
+FAILED: Gateway error. Manual admin intervention required.
+5. Technical Safeguards (The "Must Haves" for the AI Coder)
+When we begin generating the C# code for this, the AI/Developer must follow these strict rules:
+Idempotency Keys: Every LedgerEntry insertion method MUST accept an IdempotencyKey (e.g., EscrowRelease_Order123_Vendor456). Before inserting, query the ledger. If the key exists, return success immediately without inserting again.
+Transaction Scopes: A state change in EscrowTransaction, writing to EscrowStateHistory, and updating the WalletLedger MUST happen inside a single EF Core IDbContextTransaction. If the server loses power midway, the whole thing rolls back.
+Cron Job Fallbacks: Auto-delivery (moving SHIPPED to DELIVERED without a webhook) will ONLY trigger if: Tracking exists + Courier API is unresponsive + Supplier Lead Time is heavily exceeded.
+Conclusion & Next Steps
+This upgraded plan resolves all fintech vulnerabilities.
+Math is exact. (Gateway fees are accounted for).
+Money is safe. (Idempotency and Concurrency prevent double spending).
+Audit is perfect. (Ledger and State History log every heartbeat).
+If you and your team approve this upgraded blueprint, let me know, and I will generate Step 1: The Ledger & Escrow Data Models with the strict RowVersion and Idempotency implementations!

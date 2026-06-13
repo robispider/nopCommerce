@@ -1,0 +1,102 @@
+@model Nop.Plugin.Marketplace.Dropship.Models.DropshipTicketSearchModel
+@{
+    Layout = "_AdminLayout";
+    NopHtml.SetActiveMenuItemSystemName("Marketplace.DropshipOrders");
+    NopHtml.AddTitleParts("Dropship Orders");
+}
+
+@Html.AntiForgeryToken()
+
+<div class="content-header clearfix">
+    <h1 class="float-left">
+        Supplier Dropship Orders
+        <small>Fulfill orders sent to you by resellers</small>
+    </h1>
+</div>
+
+<section class="content">
+    <div class="container-fluid">
+        <div class="card card-default">
+            <div class="card-body">
+                @await Html.PartialAsync("Table", new DataTablesModel
+                {
+                    Name = "dropship-tickets-grid",
+                    UrlRead = new DataUrl("List", "SupplierDropship", null),
+                    Length = Model.PageSize,
+                    LengthMenu = Model.AvailablePageSizes,
+                    ColumnCollection = new List<ColumnProperty>
+                    {
+                        new ColumnProperty(nameof(Nop.Plugin.Marketplace.Dropship.Models.DropshipTicketModel.OrderNumber))
+                        {
+                            Title = "Order #", Width = "100"
+                        },
+                        new ColumnProperty(nameof(Nop.Plugin.Marketplace.Dropship.Models.DropshipTicketModel.ProductName))
+                        {
+                            Title = "Product", Width = "250"
+                        },
+                        new ColumnProperty(nameof(Nop.Plugin.Marketplace.Dropship.Models.DropshipTicketModel.Quantity))
+                        {
+                            Title = "Qty", Width = "50"
+                        },
+                        new ColumnProperty(nameof(Nop.Plugin.Marketplace.Dropship.Models.DropshipTicketModel.LockedWholesalePrice))
+                        {
+                            Title = "Your Earnings", Width = "100"
+                        },
+                        new ColumnProperty(nameof(Nop.Plugin.Marketplace.Dropship.Models.DropshipTicketModel.StatusHtml))
+                        {
+                            Title = "Status", Width = "100", Encode = false
+                        },
+                        new ColumnProperty(nameof(Nop.Plugin.Marketplace.Dropship.Models.DropshipTicketModel.TrackingNumber))
+                        {
+                            Title = "Tracking", Width = "150"
+                        },
+                        new ColumnProperty(nameof(Nop.Plugin.Marketplace.Dropship.Models.DropshipTicketModel.Id))
+                        {
+                            Title = "Action",
+                            Width = "100",
+                            ClassName = NopColumnClassDefaults.Button,
+                            Render = new RenderCustom("renderShipButton")
+                        }
+                    }
+                })
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    function renderShipButton(data, type, row, meta) {
+        if (row.TrackingNumber !== "Not Shipped") {
+            return `<span class="text-success"><i class="fas fa-check"></i> Shipped</span>`;
+        }
+        return `<button type="button" class="btn btn-info" onclick="shipItem(${data}, '${row.OrderNumber}')">
+                    <i class="fas fa-truck"></i> Ship
+                </button>`;
+    }
+
+    function shipItem(ticketId, orderNum) {
+        let trackingNum = prompt(`Fulfilling Order: ${orderNum}\n\nEnter the Courier Tracking Number:`);
+        
+        if (trackingNum != null && trackingNum.trim() !== "") {
+            $.ajax({
+                cache: false,
+                type: "POST",
+                url: "@Url.Action("UpdateTracking", "SupplierDropship")",
+                data: {
+                    id: ticketId,
+                    trackingNumber: trackingNum.trim()
+                },
+                headers: {
+                    "RequestVerificationToken": $('input[name="__RequestVerificationToken"]').val()
+                },
+                success: function (data) {
+                    if (data.success) {
+                        updateTable('#dropship-tickets-grid');
+                    } else {
+                        alert("Error: " + data.message);
+                    }
+                }
+            });
+        }
+    }
+</script>

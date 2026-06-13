@@ -1,44 +1,41 @@
 ﻿using Nop.Services.Events;
-using Nop.Services.Security;
 using Nop.Web.Framework.Events;
 using Nop.Web.Framework.Menu;
 
 namespace Nop.Plugin.Marketplace.Storefront.Events
 {
     /// <summary>
-    /// Injects a "My Storefront" menu item into the nopCommerce Admin Sidebar.
+    /// Injects "My Storefront" into the Admin Sidebar.
     /// </summary>
     public class AdminMenuEventConsumer : IConsumer<AdminMenuCreatedEvent>
     {
-        private readonly IPermissionService _permissionService;
-
-        public AdminMenuEventConsumer(IPermissionService permissionService)
+        public Task HandleEventAsync(AdminMenuCreatedEvent eventMessage)
         {
-            _permissionService = permissionService;
-        }
-
-        public async Task HandleEventAsync(AdminMenuCreatedEvent eventMessage)
-        {
-            // Bypass the missing StandardPermissionProvider by using the system name string directly.
-            // If they don't have access to the admin panel at all, do nothing.
-            if (!await _permissionService.AuthorizeAsync("AccessAdminPanel"))
-                return;
-
             var pluginNode = new AdminMenuItem
             {
                 SystemName = "Marketplace.Storefront.Manage",
                 Title = "My Storefront",
-
-                // By providing a full URL string, the AdminMenuItem property setter will 
-                // automatically parse ControllerName ("StorefrontAdmin") and ActionName ("Configure") for us!
-                Url = "~/Admin/StorefrontAdmin/Configure",
-
-                IconClass = "fas fa-store", // Uses FontAwesome icon natively included in nopCommerce
+                Url = "/Admin/StorefrontAdmin/Configure", // Exact same URL format as Phase 1
+                IconClass = "fas fa-store-alt", // A slightly different store icon
                 Visible = true
             };
 
-            // In recent versions, the menu tree is held in the 'RootMenuItem' property
-            eventMessage.RootMenuItem.ChildNodes.Add(pluginNode);
+            // Let's try to find the "Marketplace" menu you created in Phase 1
+            var marketplaceNode = eventMessage.RootMenuItem.ChildNodes
+                .FirstOrDefault(x => x.SystemName == "Marketplace.Admin");
+
+            if (marketplaceNode != null)
+            {
+                // If it finds the Marketplace menu, put "My Storefront" inside it!
+                marketplaceNode.ChildNodes.Add(pluginNode);
+            }
+            else
+            {
+                // Fallback: If it doesn't find it, put it right below the Dashboard (Index 1) just like Phase 1
+                eventMessage.RootMenuItem.ChildNodes.Insert(1, pluginNode);
+            }
+
+            return Task.CompletedTask;
         }
     }
 }

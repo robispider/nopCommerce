@@ -28,6 +28,8 @@ namespace Nop.Plugin.Marketplace.Core.Domains
         /// </summary>
         public int ResellerBusinessId { get; set; }
 
+        public int SelectedProcurementPolicyId { get; set; }
+
         public bool SyncInventory { get; set; }
 
         public decimal MarginPercentage { get; set; }

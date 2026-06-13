@@ -1,0 +1,11 @@
+{
+  "Group": "Marketplace",
+  "FriendlyName": "Marketplace Wallet",
+  "SystemName": "Marketplace.Wallet",
+  "Version": "1.00",
+  "SupportedVersions": [ "4.90" ],
+  "Author": "YourCompany",
+  "DisplayOrder": 5,
+  "FileName": "Nop.Plugin.Marketplace.Wallet.dll",
+  "Description": "Handles wallet"
+}
