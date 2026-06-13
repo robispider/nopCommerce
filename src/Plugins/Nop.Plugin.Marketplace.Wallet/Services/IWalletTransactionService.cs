@@ -5,15 +5,17 @@ namespace Nop.Plugin.Marketplace.Wallet.Services
 {
     public interface IWalletTransactionService
     {
-        Task ProcessEscrowReleaseAsync(SettlementRequestedEvent releaseEvent);
+        // Combined and fixed!
+        Task ProcessSettlementAsync(SettlementRequestedEvent releaseEvent);
 
-        
+        // Handles Phase 3 RTOs & Disputes
+        Task ProcessRefundAsync(EscrowRefundedEvent refundEvent);
+
         Task<int> RequestWithdrawalAsync(int vendorId, decimal amount);
         Task ApproveWithdrawalAsync(int withdrawalRequestId, string adminNotes = null);
         Task RejectWithdrawalAsync(int withdrawalRequestId, string adminNotes = null);
+
         Task ProcessReserveHoldAsync(ReserveHoldRequestedEvent holdEvent);
         Task ProcessReserveReleaseAsync(ReserveReleasedEvent releaseEvent);
-
-        
     }
 }

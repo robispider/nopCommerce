@@ -15,6 +15,7 @@
     <ProjectReference Include="$(SolutionDir)\Presentation\Nop.Web\Nop.Web.csproj">
       <Private>false</Private>
     </ProjectReference>
+    <!-- ONLY Reference Core and Inventory. NO ESCROW! -->
     <ProjectReference Include="..\Nop.Plugin.Marketplace.Core\Nop.Plugin.Marketplace.Core.csproj" />
     <ProjectReference Include="..\Nop.Plugin.Marketplace.Inventory\Nop.Plugin.Marketplace.Inventory.csproj" />
     <ClearPluginAssemblies Include="$(SolutionDir)\Build\ClearPluginAssemblies.proj" />

@@ -14,7 +14,8 @@ namespace Nop.Plugin.Marketplace.Order.Data
                 .WithColumn(nameof(MarketplaceOrderGroup.StatusId)).AsInt32().NotNullable().Indexed()
                 .WithColumn(nameof(MarketplaceOrderGroup.CreatedOnUtc)).AsDateTime2().NotNullable()
                 .WithColumn(nameof(MarketplaceOrderGroup.UpdatedOnUtc)).AsDateTime2().NotNullable()
-                .WithColumn(nameof(MarketplaceOrderGroup.CompletedOnUtc)).AsDateTime2().Nullable();
+                .WithColumn(nameof(MarketplaceOrderGroup.CompletedOnUtc)).AsDateTime2().Nullable()
+                .WithColumn(nameof(MarketplaceOrderGroup.ConcurrencyVersion)).AsInt32().WithDefaultValue(1);
         }
     }
 

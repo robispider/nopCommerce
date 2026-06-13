@@ -14,7 +14,7 @@ namespace Nop.Plugin.Marketplace.Escrow.Infrastructure
             // Register Escrow Service
             services.AddScoped<IEscrowService, EscrowService>();
             
-services.AddScoped<ICommissionService, CommissionService>();
+
         }
 
         public void Configure(IApplicationBuilder application) { }

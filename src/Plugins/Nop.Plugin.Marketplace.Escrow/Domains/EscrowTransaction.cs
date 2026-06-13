@@ -20,5 +20,6 @@ namespace Nop.Plugin.Marketplace.Escrow.Domains
         public decimal NetResellerAmount { get; set; }
 
         public DateTime UpdatedOnUtc { get; set; }
+        public int ConcurrencyVersion { get; set; }
     }
 }

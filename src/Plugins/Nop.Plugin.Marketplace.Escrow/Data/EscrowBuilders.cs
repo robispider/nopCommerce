@@ -4,6 +4,7 @@ using Nop.Data.Extensions;
 using Nop.Data.Mapping.Builders;
 using Nop.Data.Migrations;
 using Nop.Plugin.Marketplace.Escrow.Domains;
+using Nop.Plugin.Marketplace.Order.Domains;
 
 namespace Nop.Plugin.Marketplace.Escrow.Data
 {
@@ -16,7 +17,8 @@ namespace Nop.Plugin.Marketplace.Escrow.Data
                 .WithColumn(nameof(EscrowTransaction.SupplierVendorId)).AsInt32().Indexed()
                 .WithColumn(nameof(EscrowTransaction.ResellerVendorId)).AsInt32().Indexed()
                 .WithColumn(nameof(EscrowTransaction.CurrentStateId)).AsInt32().Indexed()
-                .WithColumn(nameof(EscrowTransaction.UpdatedOnUtc)).AsDateTime2();
+                .WithColumn(nameof(EscrowTransaction.UpdatedOnUtc)).AsDateTime2()
+            .WithColumn(nameof(MarketplaceOrderGroup.ConcurrencyVersion)).AsInt32().WithDefaultValue(1);
         }
     }
     public class EscrowStateHistoryBuilder : NopEntityBuilder<EscrowStateHistory>

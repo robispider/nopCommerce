@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Transactions; // Standard .NET Transaction Scope
+using Nop.Core.Caching; // NopCommerce Native Distributed Lock!
 using Nop.Core.Events;
 using Nop.Data;
 using Nop.Plugin.Marketplace.Core.Domains;
 using Nop.Plugin.Marketplace.Core.Events;
 using Nop.Plugin.Marketplace.Wallet.Domains;
+using Nop.Services.Events;
 
 namespace Nop.Plugin.Marketplace.Wallet.Services
 {
@@ -15,36 +16,41 @@ namespace Nop.Plugin.Marketplace.Wallet.Services
         private readonly IRepository<WalletLedger> _ledgerRepository;
         private readonly IRepository<WalletAccount> _accountRepository;
         private readonly IRepository<WithdrawalRequest> _withdrawalRepository;
-        private readonly IEventPublisher _eventPublisher; // <-- Added
+        private readonly IEventPublisher _eventPublisher;
+        private readonly ILocker _locker;
 
         public WalletTransactionService(
             IRepository<WalletLedger> ledgerRepository,
             IRepository<WalletAccount> accountRepository,
             IRepository<WithdrawalRequest> withdrawalRepository,
-            IEventPublisher eventPublisher)
+            IEventPublisher eventPublisher,
+            ILocker locker)
         {
             _ledgerRepository = ledgerRepository;
             _accountRepository = accountRepository;
             _withdrawalRepository = withdrawalRepository;
             _eventPublisher = eventPublisher;
+            _locker = locker;
         }
 
-        public async Task ProcessSettlementRequestAsync(SettlementRequestedEvent releaseEvent)
+        public async Task ProcessSettlementAsync(SettlementRequestedEvent releaseEvent)
         {
+            // Global Idempotency Check
             if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == releaseEvent.IdempotencyKey))
                 return;
 
-            // Bank-Grade ACID Lock
-            using (var scope = new TransactionScope(TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.Serializable }, TransactionScopeAsyncFlowOption.Enabled))
-            {
-                await CreditWalletAsync(releaseEvent.SupplierVendorId, releaseEvent.SupplierAmount, releaseEvent.IdempotencyKey + "_SUP");
-                await CreditWalletAsync(releaseEvent.ResellerVendorId, releaseEvent.ResellerAmount, releaseEvent.IdempotencyKey + "_RES");
-                scope.Complete();
-            } // DB is committed here.
+            // Credit Supplier safely
+            await CreditWalletSafelyAsync(releaseEvent.SupplierVendorId, releaseEvent.SupplierAmount,
+                releaseEvent.IdempotencyKey + "_SUP", "Settlement", releaseEvent.EscrowTransactionId);
 
-            // AMAZON-GRADE: Tell Escrow that we safely got the money.
-            // Publishing this *after* the scope completes ensures we only notify Escrow if DB write succeeds.
+            // Credit Reseller (if applicable)
+            if (releaseEvent.ResellerVendorId > 0 && releaseEvent.ResellerAmount > 0)
+            {
+                await CreditWalletSafelyAsync(releaseEvent.ResellerVendorId, releaseEvent.ResellerAmount,
+                    releaseEvent.IdempotencyKey + "_RES", "Settlement", releaseEvent.EscrowTransactionId);
+            }
+
+            // Tell Escrow we finished so it can move to "Settled"
             await _eventPublisher.PublishAsync(new WalletSettledEvent
             {
                 EscrowTransactionId = releaseEvent.EscrowTransactionId,
@@ -52,26 +58,48 @@ namespace Nop.Plugin.Marketplace.Wallet.Services
             });
         }
 
-        private async Task CreditWalletAsync(int vendorId, decimal amount, string idempotencyKey)
+        public async Task ProcessRefundAsync(EscrowRefundedEvent refundEvent)
         {
-            var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == vendorId);
-            if (account == null)
-                throw new Exception("Wallet missing.");
+            if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == refundEvent.IdempotencyKey))
+                return;
 
-            await _ledgerRepository.InsertAsync(new WalletLedger
+            // Return the Reseller's deposit/prepay
+            await CreditWalletSafelyAsync(refundEvent.ResellerVendorId, refundEvent.RefundAmount,
+                refundEvent.IdempotencyKey, "Refund", refundEvent.EscrowTransactionId);
+        }
+
+        private async Task CreditWalletSafelyAsync(int vendorId, decimal amount, string idempotencyKey, string refType, int refId)
+        {
+            if (amount <= 0)
+                return;
+
+            string lockKey = $"marketplace_wallet_lock_{vendorId}";
+
+            await _locker.PerformActionWithLockAsync(lockKey, TimeSpan.FromSeconds(15), async () =>
             {
-                WalletAccountId = account.Id,
-                EntryTypeId = (int)LedgerEntryType.Credit, // NEW: Added Type to track Credits properly
-                Amount = amount,
-                ReferenceType = "Settlement",
-                ReferenceId = 0,
-                IdempotencyKey = idempotencyKey,
-                CreatedOnUtc = DateTime.UtcNow
-            });
+                // Re-check idempotency inside the lock
+                if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == idempotencyKey))
+                    return;
 
-            account.AvailableBalance += amount;
-            account.ConcurrencyVersion += 1;
-            await _accountRepository.UpdateAsync(account);
+                var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == vendorId);
+                if (account == null)
+                    throw new Exception($"Wallet missing for Vendor {vendorId}.");
+
+                await _ledgerRepository.InsertAsync(new WalletLedger
+                {
+                    WalletAccountId = account.Id,
+                    EntryTypeId = (int)LedgerEntryType.Credit,
+                    Amount = amount,
+                    ReferenceType = refType,
+                    ReferenceId = refId,
+                    IdempotencyKey = idempotencyKey,
+                    CreatedOnUtc = DateTime.UtcNow
+                });
+
+                account.AvailableBalance += amount;
+                account.ConcurrencyVersion += 1;
+                await _accountRepository.UpdateAsync(account);
+            });
         }
 
         public async Task<int> RequestWithdrawalAsync(int vendorId, decimal amount)
@@ -79,118 +107,98 @@ namespace Nop.Plugin.Marketplace.Wallet.Services
             if (amount <= 0)
                 throw new ArgumentException("Amount must be greater than zero.");
 
-            // AMAZON-GRADE: IsolationLevel.Serializable creates a hard DB lock.
-            // Prevents race conditions where 2 concurrent requests pass the balance check.
-            using var scope = new TransactionScope(TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.Serializable }, TransactionScopeAsyncFlowOption.Enabled);
+            int requestId = 0;
+            string lockKey = $"marketplace_wallet_lock_{vendorId}";
 
-            var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == vendorId);
-            if (account == null || account.AvailableBalance < amount)
-                throw new Exception("Insufficient available balance.");
-
-            account.AvailableBalance -= amount;
-            account.PendingBalance += amount;
-            account.ConcurrencyVersion += 1;
-            await _accountRepository.UpdateAsync(account);
-
-            var request = new WithdrawalRequest
+            await _locker.PerformActionWithLockAsync(lockKey, TimeSpan.FromSeconds(15), async () =>
             {
-                VendorId = vendorId,
-                Amount = amount,
-                StatusId = (int)WithdrawalStatus.Requested,
-                CreatedOnUtc = DateTime.UtcNow,
-                UpdatedOnUtc = DateTime.UtcNow
-            };
-            await _withdrawalRepository.InsertAsync(request);
+                var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == vendorId);
+                if (account == null || account.AvailableBalance < amount)
+                    throw new Exception("Insufficient available balance.");
 
-            scope.Complete();
-            return request.Id;
+                // Freeze the funds into Pending
+                account.AvailableBalance -= amount;
+                account.PendingBalance += amount;
+                account.ConcurrencyVersion += 1;
+                await _accountRepository.UpdateAsync(account);
+
+                var request = new WithdrawalRequest
+                {
+                    VendorId = vendorId,
+                    Amount = amount,
+                    StatusId = (int)WithdrawalStatus.Requested,
+                    CreatedOnUtc = DateTime.UtcNow,
+                    UpdatedOnUtc = DateTime.UtcNow
+                };
+                await _withdrawalRepository.InsertAsync(request);
+                requestId = request.Id;
+            });
+
+            return requestId;
         }
-
-        public async Task ProcessEscrowReleaseAsync(SettlementRequestedEvent releaseEvent)
-        {
-            // Fix 1: Removed .TableNoTracking (Use .Table in Nop 4.90)
-            if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == releaseEvent.IdempotencyKey))
-                return;
-
-            // Fix 2: Use TransactionScope with AsyncFlowOption enabled for EF Core safely
-            using var scope = new TransactionScope(
-                TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted },
-                TransactionScopeAsyncFlowOption.Enabled);
-
-            // Credit Supplier
-            await CreditWalletAsync(releaseEvent.SupplierVendorId, releaseEvent.SupplierAmount, releaseEvent.IdempotencyKey + "_SUP");
-
-            // Credit Reseller
-            await CreditWalletAsync(releaseEvent.ResellerVendorId, releaseEvent.ResellerAmount, releaseEvent.IdempotencyKey + "_RES");
-
-            scope.Complete();
-        }
-
-        
 
         public async Task ApproveWithdrawalAsync(int withdrawalRequestId, string adminNotes = null)
         {
-            using var scope = new TransactionScope(TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted }, TransactionScopeAsyncFlowOption.Enabled);
-
             var request = await _withdrawalRepository.GetByIdAsync(withdrawalRequestId);
             if (request == null || request.StatusId != (int)WithdrawalStatus.Requested)
                 throw new Exception("Invalid or already processed withdrawal request.");
 
-            var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == request.VendorId);
+            string lockKey = $"marketplace_wallet_lock_{request.VendorId}";
 
-            // 1. Write Debit to Immutable Ledger (Money officially leaves platform)
-            await _ledgerRepository.InsertAsync(new WalletLedger
+            await _locker.PerformActionWithLockAsync(lockKey, TimeSpan.FromSeconds(15), async () =>
             {
-                WalletAccountId = account.Id,
-                EntryTypeId = (int)LedgerEntryType.Debit,
-                Amount = request.Amount,
-                ReferenceType = "Withdrawal",
-                ReferenceId = request.Id,
-                IdempotencyKey = $"WD_{request.Id}_APP",
-                CreatedOnUtc = DateTime.UtcNow
+                var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == request.VendorId);
+                string idempotencyKey = $"WD_{request.Id}_APP";
+
+                if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == idempotencyKey))
+                    return;
+
+                // Money leaves the platform permanently
+                await _ledgerRepository.InsertAsync(new WalletLedger
+                {
+                    WalletAccountId = account.Id,
+                    EntryTypeId = (int)LedgerEntryType.Debit,
+                    Amount = request.Amount,
+                    ReferenceType = "Withdrawal",
+                    ReferenceId = request.Id,
+                    IdempotencyKey = idempotencyKey,
+                    CreatedOnUtc = DateTime.UtcNow
+                });
+
+                account.PendingBalance -= request.Amount;
+                account.ConcurrencyVersion += 1;
+                await _accountRepository.UpdateAsync(account);
+
+                request.StatusId = (int)WithdrawalStatus.Completed;
+                request.AdminNotes = adminNotes;
+                request.UpdatedOnUtc = DateTime.UtcNow;
+                await _withdrawalRepository.UpdateAsync(request);
             });
-
-            // 2. Remove funds from Pending permanently
-            account.PendingBalance -= request.Amount;
-            account.ConcurrencyVersion += 1;
-            await _accountRepository.UpdateAsync(account);
-
-            // 3. Mark request as Completed
-            request.StatusId = (int)WithdrawalStatus.Completed;
-            request.AdminNotes = adminNotes;
-            request.UpdatedOnUtc = DateTime.UtcNow;
-            await _withdrawalRepository.UpdateAsync(request);
-
-            scope.Complete();
         }
 
         public async Task RejectWithdrawalAsync(int withdrawalRequestId, string adminNotes = null)
         {
-            using var scope = new TransactionScope(TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.ReadCommitted }, TransactionScopeAsyncFlowOption.Enabled);
-
             var request = await _withdrawalRepository.GetByIdAsync(withdrawalRequestId);
             if (request == null || request.StatusId != (int)WithdrawalStatus.Requested)
                 throw new Exception("Invalid or already processed withdrawal request.");
 
-            var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == request.VendorId);
+            string lockKey = $"marketplace_wallet_lock_{request.VendorId}";
 
-            // 1. Return funds back to Available (Unlock them)
-            account.PendingBalance -= request.Amount;
-            account.AvailableBalance += request.Amount;
-            account.ConcurrencyVersion += 1;
-            await _accountRepository.UpdateAsync(account);
+            await _locker.PerformActionWithLockAsync(lockKey, TimeSpan.FromSeconds(15), async () =>
+            {
+                var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == request.VendorId);
 
-            // 2. Mark request as Rejected
-            request.StatusId = (int)WithdrawalStatus.Rejected;
-            request.AdminNotes = adminNotes;
-            request.UpdatedOnUtc = DateTime.UtcNow;
-            await _withdrawalRepository.UpdateAsync(request);
+                // Return funds back to Available Balance from Pending Balance
+                account.PendingBalance -= request.Amount;
+                account.AvailableBalance += request.Amount;
+                account.ConcurrencyVersion += 1;
+                await _accountRepository.UpdateAsync(account);
 
-            scope.Complete();
+                request.StatusId = (int)WithdrawalStatus.Rejected;
+                request.AdminNotes = adminNotes;
+                request.UpdatedOnUtc = DateTime.UtcNow;
+                await _withdrawalRepository.UpdateAsync(request);
+            });
         }
 
         public async Task ProcessReserveHoldAsync(ReserveHoldRequestedEvent holdEvent)
@@ -198,28 +206,34 @@ namespace Nop.Plugin.Marketplace.Wallet.Services
             if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == holdEvent.IdempotencyKey))
                 return;
 
-            using var scope = new TransactionScope(TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.Serializable }, TransactionScopeAsyncFlowOption.Enabled);
+            string lockKey = $"marketplace_wallet_lock_{holdEvent.VendorId}";
 
-            var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == holdEvent.VendorId);
-
-            // Move from Available -> Reserve
-            account.AvailableBalance -= holdEvent.Amount;
-            account.ReserveBalance += holdEvent.Amount;
-            account.ConcurrencyVersion += 1;
-            await _accountRepository.UpdateAsync(account);
-
-            await _ledgerRepository.InsertAsync(new WalletLedger
+            await _locker.PerformActionWithLockAsync(lockKey, TimeSpan.FromSeconds(15), async () =>
             {
-                WalletAccountId = account.Id,
-                EntryTypeId = 2,
-                Amount = holdEvent.Amount,
-                ReferenceType = "ReserveHold",
-                IdempotencyKey = holdEvent.IdempotencyKey,
-                CreatedOnUtc = DateTime.UtcNow
-            });
+                if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == holdEvent.IdempotencyKey))
+                    return;
 
-            scope.Complete();
+                var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == holdEvent.VendorId);
+                if (account == null)
+                    throw new Exception($"Wallet missing for Vendor {holdEvent.VendorId}.");
+
+                // Move from Available -> Reserve
+                account.AvailableBalance -= holdEvent.Amount;
+                account.ReserveBalance += holdEvent.Amount;
+                account.ConcurrencyVersion += 1;
+                await _accountRepository.UpdateAsync(account);
+
+                await _ledgerRepository.InsertAsync(new WalletLedger
+                {
+                    WalletAccountId = account.Id,
+                    EntryTypeId = (int)LedgerEntryType.Debit,
+                    Amount = holdEvent.Amount,
+                    ReferenceType = "ReserveHold",
+                    ReferenceId = holdEvent.EscrowTransactionId,
+                    IdempotencyKey = holdEvent.IdempotencyKey,
+                    CreatedOnUtc = DateTime.UtcNow
+                });
+            });
         }
 
         public async Task ProcessReserveReleaseAsync(ReserveReleasedEvent releaseEvent)
@@ -227,28 +241,34 @@ namespace Nop.Plugin.Marketplace.Wallet.Services
             if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == releaseEvent.IdempotencyKey))
                 return;
 
-            using var scope = new TransactionScope(TransactionScopeOption.Required,
-                new TransactionOptions { IsolationLevel = IsolationLevel.Serializable }, TransactionScopeAsyncFlowOption.Enabled);
+            string lockKey = $"marketplace_wallet_lock_{releaseEvent.VendorId}";
 
-            var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == releaseEvent.VendorId);
-
-            // Move from Reserve -> Available
-            account.ReserveBalance -= releaseEvent.Amount;
-            account.AvailableBalance += releaseEvent.Amount;
-            account.ConcurrencyVersion += 1;
-            await _accountRepository.UpdateAsync(account);
-
-            await _ledgerRepository.InsertAsync(new WalletLedger
+            await _locker.PerformActionWithLockAsync(lockKey, TimeSpan.FromSeconds(15), async () =>
             {
-                WalletAccountId = account.Id,
-                EntryTypeId = 1,
-                Amount = releaseEvent.Amount,
-                ReferenceType = "ReserveRelease",
-                IdempotencyKey = releaseEvent.IdempotencyKey,
-                CreatedOnUtc = DateTime.UtcNow
-            });
+                if (await _ledgerRepository.Table.AnyAsync(x => x.IdempotencyKey == releaseEvent.IdempotencyKey))
+                    return;
 
-            scope.Complete();
+                var account = await _accountRepository.Table.FirstOrDefaultAsync(x => x.VendorId == releaseEvent.VendorId);
+                if (account == null)
+                    throw new Exception($"Wallet missing for Vendor {releaseEvent.VendorId}.");
+
+                // Move from Reserve -> Available
+                account.ReserveBalance -= releaseEvent.Amount;
+                account.AvailableBalance += releaseEvent.Amount;
+                account.ConcurrencyVersion += 1;
+                await _accountRepository.UpdateAsync(account);
+
+                await _ledgerRepository.InsertAsync(new WalletLedger
+                {
+                    WalletAccountId = account.Id,
+                    EntryTypeId = (int)LedgerEntryType.Credit,
+                    Amount = releaseEvent.Amount,
+                    ReferenceType = "ReserveRelease",
+                    ReferenceId = releaseEvent.ReserveScheduleId,
+                    IdempotencyKey = releaseEvent.IdempotencyKey,
+                    CreatedOnUtc = DateTime.UtcNow
+                });
+            });
         }
     }
 }

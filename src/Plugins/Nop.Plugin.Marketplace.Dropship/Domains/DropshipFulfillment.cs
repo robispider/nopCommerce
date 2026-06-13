@@ -21,6 +21,7 @@ namespace Nop.Plugin.Marketplace.Dropship.Domains
         public DateTime CreatedOnUtc { get; set; }
         public DateTime? ShippedOnUtc { get; set; }
 
-
+        public string CourierSystemName { get; set; } // "fedex", "pathao", "self-delivery"
+        public DateTime? DeliveredOnUtc { get; set; }
     }
 }

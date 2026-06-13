@@ -1,22 +1,24 @@
 ﻿using System.Threading.Tasks;
-using Nop.Core.Events; // Fixed
-using Nop.Services.Events; // Fixed
+using Nop.Core.Events;
+using Nop.Services.Events;
 using Nop.Plugin.Marketplace.Core.Events;
 using Nop.Plugin.Marketplace.Wallet.Services;
 
 namespace Nop.Plugin.Marketplace.Wallet.Consumers
 {
-    public class EscrowReleasedEventConsumer : IConsumer<SettlementRequestedEvent>
+    public class SettlementRequestedEventConsumer : IConsumer<SettlementRequestedEvent>
     {
         private readonly IWalletTransactionService _walletTransactionService;
-        public EscrowReleasedEventConsumer(IWalletTransactionService walletTransactionService)
+
+        public SettlementRequestedEventConsumer(IWalletTransactionService walletTransactionService)
         {
             _walletTransactionService = walletTransactionService;
         }
 
         public async Task HandleEventAsync(SettlementRequestedEvent eventMessage)
         {
-            await _walletTransactionService.ProcessEscrowReleaseAsync(eventMessage);
+            // We now call the single unified method!
+            await _walletTransactionService.ProcessSettlementAsync(eventMessage);
         }
     }
 }

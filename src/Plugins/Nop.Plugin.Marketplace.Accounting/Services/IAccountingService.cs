@@ -8,5 +8,7 @@ namespace Nop.Plugin.Marketplace.Accounting.Services
     {
         Task RecordTransactionAsync(JournalEntry header, IEnumerable<JournalEntryLine> lines);
         Task<GlAccount> GetAccountByCodeAsync(string accountCode);
+        Task<decimal> GetAccountBalanceAsync(string accountCode);
+        Task<bool> VerifyLedgerIntegrityAsync();
     }
 }
